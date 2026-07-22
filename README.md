@@ -70,6 +70,34 @@ src/prospecting/ Application package
 tests/           unit · contract · invariants · architecture
 ```
 
+## Configuration
+
+Behaviour lives in `config/*.yaml`; secrets live in `.env`. Values are layered,
+lowest precedence first:
+
+1. `config/runtime.yaml` and `config/icp.yaml` — the committed baseline
+2. `config/profiles/<name>.yaml` — selected by `PROSPECTING_PROFILE`
+3. `PROSPECTING__SECTION__KEY` environment variables
+
+```bash
+PROSPECTING_PROFILE=dev PROSPECTING__LOG__LEVEL=DEBUG python -m pytest
+```
+
+Configuration is loaded explicitly and passed explicitly — there is no global
+accessor:
+
+```python
+from prospecting.config import load_settings
+
+settings = load_settings()
+settings.runtime.max_concurrent_requests
+```
+
+Every load records its own provenance in `settings.meta`: which files were
+merged, which profile applied, and which environment variables overrode a file
+value. Invalid configuration fails at startup with every problem listed at once,
+not on the first API call an hour into a run.
+
 Inside `src/prospecting`, dependencies point inward only:
 
 ```
@@ -91,7 +119,7 @@ the next begins.
 | Phase | Component | Status |
 |------:|-----------|--------|
 | 1 | Project skeleton and boundary enforcement | ✅ Complete |
-| 2 | Configuration system | Not started |
+| 2 | Configuration system | ✅ Complete |
 | 3 | Domain models | Not started |
 | 4 | Schemas and input ingestion | Not started |
 | 5 | Ports | Not started |

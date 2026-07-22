@@ -1,0 +1,24 @@
+# Development overlay: PROSPECTING_PROFILE=dev
+#
+# Only the differences from the baseline. Anything not restated here keeps its
+# value from config/runtime.yaml and config/icp.yaml.
+
+runtime:
+  # Gentler on target sites while iterating, and easier to follow in the log.
+  max_concurrent_requests: 2
+  max_concurrent_per_domain: 1
+
+log:
+  level: DEBUG
+  progress_every_n_records: 5
+
+budget:
+  # A development mistake should cost pennies, not the production ceiling.
+  max_usd_per_run: 2.0
+  max_crawls_per_run: 100
+  max_searches_per_run: 25
+  max_llm_calls_per_run: 50
+
+checkpoint:
+  # Flush every record so an interrupted debugging run loses nothing.
+  flush_every_n_records: 1

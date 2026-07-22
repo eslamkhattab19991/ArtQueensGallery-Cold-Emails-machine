@@ -1,0 +1,25 @@
+# Automated-test overlay: PROSPECTING_PROFILE=test
+#
+# Chosen so that a test which accidentally performs real work fails fast and
+# visibly rather than quietly spending money.
+
+runtime:
+  max_concurrent_requests: 1
+  max_concurrent_per_domain: 1
+  request_timeout_seconds: 5.0
+
+retry:
+  # No retries: a test should surface a failure immediately, not mask it behind
+  # backoff and a slow suite.
+  max_attempts: 1
+
+log:
+  level: WARNING
+  progress_every_n_records: 1000
+  log_cost_estimates: false
+
+budget:
+  max_usd_per_run: 0.01
+  max_crawls_per_run: 1
+  max_searches_per_run: 1
+  max_llm_calls_per_run: 1

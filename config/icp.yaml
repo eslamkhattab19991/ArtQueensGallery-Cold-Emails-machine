@@ -1,0 +1,77 @@
+# Ideal Artist Profile — the tunable definition of a qualified lead.
+#
+# Everything here is expected to change as outreach data accumulates, which is
+# exactly why none of it lives in code. Derived from "Ideal Artist Profile.md"
+# and ARCHITECTURE.md §4.4.
+
+icp:
+  # Stamped onto every scored record. Bump this whenever weights, thresholds, or
+  # countries change: scores produced under different rubric versions are not
+  # comparable, and without the stamp there is no way to tell them apart later.
+  rubric_version: icp-v1.0
+
+  # ISO 3166-1 alpha-2. Country names or lowercase codes are rejected at load
+  # time, because they would fail to match extracted values and would silently
+  # exclude an entire market.
+  #
+  # Every code is quoted deliberately. YAML 1.1 resolves the unquoted token NO
+  # to the boolean false — the well-known "Norway problem" — which would drop
+  # Norway from the target markets with no error at all. Quoting the whole list
+  # rather than only NO means the next code added is safe by default.
+  priority_countries:
+    # North America
+    - "US"
+    - "CA"
+    # Europe
+    - "GB"
+    - "FR"
+    - "DE"
+    - "IT"
+    - "ES"
+    - "NL"
+    - "BE"
+    - "CH"
+    - "AT"
+    - "DK"
+    - "SE"
+    - "NO"
+    - "FI"
+    - "IE"
+    - "LU"
+    # Oceania
+    - "AU"
+    - "NZ"
+    # Middle East
+    - "AE"
+    - "QA"
+
+  # "Other high-income countries may also qualify" (Ideal Artist Profile).
+  # Enabled, but such leads are flagged so their conversion can be compared
+  # against the explicitly targeted markets.
+  allow_other_high_income_countries: true
+
+  # Gender is a hard filter, so its confidence floor is set high: a false
+  # positive here means contacting someone outside the ICP entirely, which is a
+  # worse failure than dropping a borderline candidate.
+  min_gender_confidence: 0.85
+
+  # General floor below which an extracted field is not trusted for scoring.
+  min_field_confidence: 0.60
+
+  # Must total 100 — enforced at load time. Editing one weight without
+  # rebalancing the others silently rescales every score and invalidates the
+  # tier thresholds below.
+  signal_weights:
+    exhibition_history: 30.0
+    career_stage_fit: 25.0
+    professional_presence: 15.0
+    gallery_representation: 15.0
+    english_fluency: 10.0
+    personalization_potential: 5.0
+
+  # Minimum total score per tier; must strictly descend. Below tier_c the lead
+  # is rejected and written to rejected.csv with its reasons.
+  tier_thresholds:
+    tier_a: 75.0
+    tier_b: 55.0
+    tier_c: 40.0

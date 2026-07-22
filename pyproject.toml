@@ -15,11 +15,17 @@ authors = [{ name = "Art Queens Gallery" }]
 # implemented. Declaring dependencies before there is code that imports them
 # produces a lockfile that lies about what the project actually uses.
 #
-#   Phase 2 (configuration) -> pydantic, pydantic-settings, pyyaml
-#   Phase 3 (domain models) -> pydantic
-#   Phase 10 (CLI)          -> typer
-#   Providers               -> firecrawl-py, anthropic, dnspython, openpyxl, httpx
-dependencies = []
+#   Phase 10 (CLI) -> typer
+#   Providers      -> firecrawl-py, anthropic, dnspython, openpyxl, httpx
+dependencies = [
+    # Phase 2 (configuration) and Phase 3 (domain models).
+    # pydantic-settings is deliberately absent: this project layers YAML files,
+    # a profile overlay, and environment variables through one explicit merge,
+    # and a second implicit env-binding mechanism would make the precedence
+    # order ambiguous. See src/prospecting/config/loader.py.
+    "pydantic>=2.10",
+    "pyyaml>=6.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -28,6 +34,7 @@ dev = [
     "mypy>=1.14",
     "ruff>=0.9",
     "import-linter>=2.1",
+    "types-PyYAML>=6.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -90,6 +97,7 @@ docstring-code-format = true
 python_version = "3.12"
 files = ["src", "tests"]
 strict = true
+plugins = ["pydantic.mypy"]
 
 # Explicit rather than inherited from `strict`, so that weakening any single
 # guarantee is a visible diff rather than a silent side effect.

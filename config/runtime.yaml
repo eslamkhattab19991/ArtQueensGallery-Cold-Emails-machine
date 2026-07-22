@@ -1,0 +1,89 @@
+# Framework behaviour: filesystem layout, concurrency, retries, checkpointing,
+# logging, and spending ceilings.
+#
+# This file is the committed baseline. Override per environment in
+# config/profiles/<name>.yaml, or per machine with PROSPECTING__SECTION__KEY
+# environment variables. Precedence is documented in src/prospecting/config/loader.py.
+#
+# Secrets never appear here — they belong in .env.
+
+paths:
+  # Relative paths resolve against the repository root at load time.
+  # project_root and config_dir are supplied by the loader and cannot be set here.
+  prompts_dir: config/prompts
+  raw_dir: data/raw
+  interim_dir: data/interim
+  master_dir: data/master
+  exports_dir: data/exports
+  checkpoint_dir: data/interim/_checkpoints
+
+runtime:
+  # Global ceiling on in-flight requests, sized for a single workstation.
+  max_concurrent_requests: 8
+
+  # Per-host ceiling. Deliberately low: most targets are small artist and
+  # gallery sites on shared hosting, where our whole global budget aimed at one
+  # host would be indistinguishable from an attack.
+  max_concurrent_per_domain: 2
+
+  request_timeout_seconds: 30.0
+
+  # Roughly one request every two seconds per host.
+  default_requests_per_minute: 30.0
+
+  # Larger platforms tolerate more; small sites should not be raised above the
+  # default without a specific reason.
+  per_domain_requests_per_minute:
+    www.artsy.net: 60.0
+    www.saatchiart.com: 60.0
+    artfacts.net: 30.0
+
+  respect_robots_txt: true
+
+  # Identifies the crawler and gives site owners a way to reach us. Update the
+  # contact address if it changes; an unreachable contact defeats the purpose.
+  user_agent: "ArtQueensGalleryProspector/0.1 (+mailto:info@artqueensgallery.com)"
+
+retry:
+  max_attempts: 3
+  initial_delay_seconds: 1.0
+  max_delay_seconds: 30.0
+  backoff_multiplier: 2.0
+  jitter: true
+
+  # Transient conditions only. A 404 will still be a 404 on the third attempt,
+  # and retrying a 403 tends to deepen a block rather than clear it.
+  retryable_status_codes: [408, 425, 429, 500, 502, 503, 504]
+
+checkpoint:
+  enabled: true
+
+  # Every 25 records. Crawl and LLM stages cost real money per record, so the
+  # I/O of a frequent flush is cheaper than re-paying for a lost batch.
+  flush_every_n_records: 25
+
+  resume_by_default: true
+  record_failures_separately: true
+  checkpoint_filename: checkpoint.json
+  failure_filename: failures.jsonl
+
+log:
+  level: INFO
+  format: text
+  progress_every_n_records: 25
+  include_timestamps: true
+  log_cost_estimates: true
+
+budget:
+  enabled: true
+
+  # Conservative opening ceilings. Raise them once a full run has been measured;
+  # they exist to make a runaway query expansion fail loudly and early.
+  max_usd_per_run: 25.0
+  max_crawls_per_run: 2000
+  max_searches_per_run: 500
+  max_llm_calls_per_run: 1000
+
+  # Stop between stages so the run ends at a resumable checkpoint rather than
+  # mid-stage with partial state.
+  stop_at_stage_boundary: true
