@@ -1,0 +1,215 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "artqueens-prospecting"
+version = "0.1.0"
+description = "AI-powered prospecting pipeline for qualifying female artists for international exhibitions."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Art Queens Gallery" }]
+
+# Runtime dependencies are added per phase, as the phase that needs them is
+# implemented. Declaring dependencies before there is code that imports them
+# produces a lockfile that lies about what the project actually uses.
+#
+#   Phase 2 (configuration) -> pydantic, pydantic-settings, pyyaml
+#   Phase 3 (domain models) -> pydantic
+#   Phase 10 (CLI)          -> typer
+#   Providers               -> firecrawl-py, anthropic, dnspython, openpyxl, httpx
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "mypy>=1.14",
+    "ruff>=0.9",
+    "import-linter>=2.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/prospecting"]
+
+
+# ---------------------------------------------------------------------------
+# Ruff — linting and formatting
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort — deterministic import order
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins — no shadowing builtins
+    "C4",   # flake8-comprehensions
+    "DTZ",  # flake8-datetimez — no naive datetimes (provenance timestamps must be tz-aware)
+    "T20",  # flake8-print — no stray print(); use the logging layer
+    "SIM",  # flake8-simplify
+    "PTH",  # flake8-use-pathlib — no os.path string juggling
+    "RUF",  # ruff-specific rules
+    "ANN",  # flake8-annotations — enforce the "strongly typed" requirement
+    "D",    # pydocstyle — enforce the "well documented" requirement
+    "ARG",  # flake8-unused-arguments
+    "TID",  # flake8-tidy-imports — banned-module enforcement
+]
+ignore = [
+    "D203",  # conflicts with D211 (blank line before class docstring)
+    "D213",  # conflicts with D212 (multi-line summary position)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests describe themselves through their names; docstrings on every assertion
+# helper add noise without adding information.
+"tests/**" = ["D100", "D101", "D102", "D103", "D104"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+
+# ---------------------------------------------------------------------------
+# Mypy — strict typing
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+
+# Explicit rather than inherited from `strict`, so that weakening any single
+# guarantee is a visible diff rather than a silent side effect.
+disallow_untyped_defs = true
+disallow_any_unimported = true
+disallow_any_generics = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unreachable = true
+strict_equality = true
+extra_checks = true
+
+# A silently-skipped module is worse than a loud error: it hides real type
+# failures behind a passing run.
+ignore_missing_imports = false
+
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+markers = [
+    "architecture: enforces structural rules from ARCHITECTURE.md",
+    "invariant: enforces domain invariants that must hold across all stages",
+    "contract: verifies an adapter satisfies its port's contract",
+]
+
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["src/prospecting"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
+
+
+# ---------------------------------------------------------------------------
+# Import Linter — architectural boundary enforcement
+#
+# ARCHITECTURE.md states: "Infrastructure must depend on the domain. Never the
+# opposite." That sentence is only true if something checks it. These contracts
+# are that check; they run in CI alongside the tests.
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+root_package = "prospecting"
+
+[[tool.importlinter.contracts]]
+name = "Domain is independent of every other layer"
+type = "forbidden"
+source_modules = ["prospecting.domain"]
+forbidden_modules = [
+    "prospecting.ports",
+    "prospecting.adapters",
+    "prospecting.pipeline",
+    "prospecting.contact",
+    "prospecting.enrichment",
+    "prospecting.scoring",
+    "prospecting.identity",
+    "prospecting.compliance",
+    "prospecting.observability",
+    "prospecting.config",
+]
+
+[[tool.importlinter.contracts]]
+name = "Ports depend only on the domain"
+type = "forbidden"
+source_modules = ["prospecting.ports"]
+forbidden_modules = [
+    "prospecting.adapters",
+    "prospecting.pipeline",
+    "prospecting.contact",
+    "prospecting.enrichment",
+    "prospecting.scoring",
+    "prospecting.identity",
+    "prospecting.compliance",
+    "prospecting.observability",
+    "prospecting.config",
+]
+
+[[tool.importlinter.contracts]]
+name = "Pipeline depends on ports, never on concrete adapters"
+type = "forbidden"
+source_modules = ["prospecting.pipeline"]
+forbidden_modules = ["prospecting.adapters"]
+
+[[tool.importlinter.contracts]]
+name = "Contact engine depends on ports, never on concrete adapters"
+type = "forbidden"
+source_modules = ["prospecting.contact"]
+forbidden_modules = ["prospecting.adapters"]
+
+[[tool.importlinter.contracts]]
+name = "Adapters carry no business logic and never call inward layers"
+type = "forbidden"
+source_modules = ["prospecting.adapters"]
+forbidden_modules = [
+    "prospecting.pipeline",
+    "prospecting.contact",
+    "prospecting.enrichment",
+    "prospecting.scoring",
+    "prospecting.identity",
+    "prospecting.compliance",
+]

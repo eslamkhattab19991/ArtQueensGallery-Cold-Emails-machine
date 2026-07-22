@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python)",
+      "Bash(python -m pytest -q)",
+      "Bash(python -m importlinter.cli lint-imports)",
+      "Bash(lint-imports)",
+      "Bash(echo \"exit=$?\")"
+    ]
+  }
+}
