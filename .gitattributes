@@ -1,0 +1,16 @@
+# Normalize line endings so that a file's contents do not depend on which
+# machine committed it. Without this, a Windows and a macOS contributor produce
+# spurious whole-file diffs on the same logical change.
+* text=auto eol=lf
+
+# Windows-only tooling that must keep CRLF to remain executable.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary formats: never normalized, never diffed as text.
+*.xlsx binary
+*.xls  binary
+*.png  binary
+*.jpg  binary
+*.pdf  binary

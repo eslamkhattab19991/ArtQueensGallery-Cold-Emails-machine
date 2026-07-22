@@ -54,3 +54,8 @@ coverage.xml
 *.swp
 .DS_Store
 Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Local tooling state (machine-specific, not shared)
+# ---------------------------------------------------------------------------
+.claude/settings.local.json
