@@ -21,6 +21,14 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+# Windows consoles default to cp1252, which cannot encode the accented names
+# this pipeline exists to collect — printing "Ivana Gagic Kicinbaci" with its
+# real diacritics crashed an earlier run mid-batch. Force UTF-8 on our own
+# streams rather than degrading the names.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 OUT = Path(__file__).parent / "out"
 CHAIN_DIR = OUT / "chain"
 CHAIN_DIR.mkdir(parents=True, exist_ok=True)
