@@ -145,6 +145,10 @@ artqueens-prospecting/
 │   │   │                             #   ExtractionMethod, SourceTier, RejectReason
 │   │   └── errors.py
 │   │
+│   ├── schemas/                       # wire contracts on the JSONL bus
+│   │   ├── envelope.py                # StageEnvelope, CostRecord, StageName
+│   │   └── seed.py                    # SeedOrganization, OrganizationType
+│   │
 │   ├── ports/
 │   │   ├── search_provider.py
 │   │   ├── crawler.py

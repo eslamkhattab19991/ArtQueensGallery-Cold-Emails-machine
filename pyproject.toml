@@ -198,6 +198,29 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Schemas depend only on the domain"
+type = "forbidden"
+source_modules = ["prospecting.schemas"]
+forbidden_modules = [
+    "prospecting.ports",
+    "prospecting.adapters",
+    "prospecting.pipeline",
+    "prospecting.contact",
+    "prospecting.enrichment",
+    "prospecting.scoring",
+    "prospecting.identity",
+    "prospecting.compliance",
+    "prospecting.observability",
+    "prospecting.config",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain does not depend on the schemas that carry it"
+type = "forbidden"
+source_modules = ["prospecting.domain"]
+forbidden_modules = ["prospecting.schemas"]
+
+[[tool.importlinter.contracts]]
 name = "Ports depend only on the domain"
 type = "forbidden"
 source_modules = ["prospecting.ports"]

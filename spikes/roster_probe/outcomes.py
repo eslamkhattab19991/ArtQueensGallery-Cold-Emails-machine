@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from verify import verify  # noqa: E402
+from verify import verify
 
 OUT = Path(__file__).parent / "out"
 
@@ -132,7 +132,8 @@ def main() -> None:
     total = len(results)
     print("=" * 62)
     print(
-        f"  COMPLETED LEADS          {len(completed):>3}   ({len(completed) / total:.0%})  <- THE KPI"
+        f"  COMPLETED LEADS          {len(completed):>3}   "
+        f"({len(completed) / total:.0%})  <- THE KPI"
     )
     print(
         f"  QUALIFIED, NO CONTACT    {len(without_email):>3}   ({len(without_email) / total:.0%})"

@@ -64,7 +64,7 @@ FIRECRAWL = "firecrawl.cmd" if sys.platform == "win32" else "firecrawl"
 def run_firecrawl(args: list[str], timeout: int = 150) -> str | None:
     """Run the Firecrawl CLI, returning stdout or None on failure."""
     try:
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [FIRECRAWL, *args],
             capture_output=True,
             text=True,
