@@ -15,8 +15,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from outcomes import classify_ownership  # noqa: E402
-from verify import verify  # noqa: E402
+from outcomes import classify_ownership
+from verify import verify
 
 OUT = Path(__file__).parent / "out"
 ROOT = Path(__file__).resolve().parents[2]

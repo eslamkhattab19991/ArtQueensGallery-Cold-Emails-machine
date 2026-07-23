@@ -91,6 +91,8 @@ ignore = [
     "ANN401",  # untyped JSON from the Firecrawl API
     "RUF001",  # en-dashes and curly quotes are real characters in the artist
                # names and page titles being parsed, not typos to normalize
+    "E501",    # HTML template lines; wrapping them would break the markup
+    "E402",    # report builder adds its own directory to sys.path before importing
 ]
 
 [tool.ruff.lint.pydocstyle]
