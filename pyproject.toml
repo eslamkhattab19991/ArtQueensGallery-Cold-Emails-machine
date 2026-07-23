@@ -80,6 +80,19 @@ ignore = [
 # helper add noise without adding information.
 "tests/**" = ["D100", "D101", "D102", "D103", "D104"]
 
+# Throwaway validation spikes (see spikes/*/README.md). These are operator-run
+# CLI probes, not library code: printing a findings table *is* their output, and
+# they read untyped JSON from an external API. They are excluded from mypy
+# entirely for the same reason. The exemptions are listed explicitly rather than
+# blanket-ignoring the directory, so a spike still cannot skip docstrings or
+# smuggle in a relative import.
+"spikes/**" = [
+    "T20",   # print() is the deliverable
+    "ANN401",  # untyped JSON from the Firecrawl API
+    "RUF001",  # en-dashes and curly quotes are real characters in the artist
+               # names and page titles being parsed, not typos to normalize
+]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
@@ -97,6 +110,9 @@ docstring-code-format = true
 python_version = "3.12"
 files = ["src", "tests"]
 strict = true
+# spikes/ is deliberately excluded: throwaway probes against untyped external
+# JSON, documented in spikes/*/README.md. Type-checking them would force casts
+# that add no value to code we intend to delete.
 plugins = ["pydantic.mypy"]
 
 # Explicit rather than inherited from `strict`, so that weakening any single
