@@ -243,6 +243,30 @@ Output: score 0–100, tier (A ≥ 75 / B 55–74 / C 40–54 / reject < 40), wr
 
 **Responsibility:** find the artist's own contact address by running an open, extensible set of independent sources, then merge and rank what they return.
 
+#### 4.5.0 The qualification gate is absolute
+
+No contact source runs for an artist that has not already passed **every** hard
+filter in §4.4 — female above the confidence floor, priority geography, full
+name present, not suppressed — and scored at or above the tier-C threshold.
+
+Discovery is deliberately permissive: it surfaces male artists, deceased
+artists, prize jurors, and organizations alongside real candidates. That is
+correct behaviour for a discovery stage, and it is precisely why this gate
+exists. An artist who fails qualification is written to `rejected.csv` with the
+reason and never reaches this stage.
+
+Two consequences, both intended:
+
+- **ICP integrity.** Nothing outside the Ideal Artist Profile can appear in an
+  outreach file, because it never acquires a contact at all.
+- **Cost.** At full exhaustion this stage can cost more per artist than
+  extraction; confining it to qualified artists is what keeps that affordable.
+
+The gate is enforced by the orchestrator (Phase 8) as a **precondition on
+invoking the stage**, not as a filter inside it. A stage that can be called with
+an unqualified artist and merely declines to act is one refactor away from
+acting.
+
 The r2 waterfall is replaced by a **pluggable engine**. Stage 5 itself is thin — it hands the artist to `contact/engine.py` and writes the result.
 
 #### 4.5.1 The `ContactSource` interface
@@ -720,15 +744,35 @@ Every value field is a `Field[T]` (§6).
 
 **`qualified_leads.csv`** — `contact_status == "direct"` only:
 ```
-canonical_id, full_name, email, email_confidence_score, email_confidence_band,
-email_source_name, email_source_url, is_role_account,
-website, instagram, linkedin, country, city, career_stage, tier, score,
-mediums, themes, gallery_representation,
+canonical_id, full_name, qualified, qualification_score, tier, rubric_version,
+gender, gender_confidence, country, city, career_stage, career_stage_confidence,
+contact_status, email, email_confidence_score, email_confidence_band,
+email_ownership, email_source_name, email_source_url, is_role_account,
+website, instagram, linkedin,
+mediums, themes, representation, representation_source_url,
 exhibition_count, solo_count, span_years, latest_exhibition_year, international_count,
-recent_activity, hook_1, hook_2, hook_3, outreach_angle,
-biography_summary, artist_statement_condensed,
-source_url, first_seen, last_updated, rubric_version
+recent_exhibitions, recent_activity,
+hook_1, hook_2, hook_3, outreach_angle,
+biography_summary, artist_statement, artist_statement_source_url,
+source_url, provenance_summary, first_seen, last_updated
 ```
+
+> **Why the qualification verdict is restated in the file.** `qualified`,
+> `contact_status`, `gender`, and the two confidence columns are all
+> *derivable* — a row is in this file only because it passed every hard filter
+> and has a direct contact. They are written explicitly anyway, because the
+> moment the file is opened in Excel, imported into a CRM, or merged with
+> another export, membership stops carrying that meaning. An ICP filter that
+> cannot be audited from its own output is a filter nobody can check: if
+> `gender` is the first hard filter, the file must show what was decided and
+> how confidently, or a systematic misclassification is invisible until it has
+> already been emailed.
+>
+> `provenance_summary` is a compact per-lead digest (which fields came from
+> which source type, and the lowest confidence among them). Full per-field
+> provenance stays in the JSONL and the master file — flattening it into CSV
+> would produce hundreds of columns — but the digest makes a weakly-sourced
+> lead visible without opening the JSONL.
 
 **`indirect_contacts.csv`** — `contact_status == "indirect"`, a separate motion:
 ```
