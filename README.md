@@ -120,7 +120,7 @@ the next begins.
 |------:|-----------|--------|
 | 1 | Project skeleton and boundary enforcement | ✅ Complete |
 | 2 | Configuration system | ✅ Complete |
-| 3 | Domain models | Not started |
+| 3 | Domain models | ✅ Complete |
 | 4 | Schemas and input ingestion | Not started |
 | 5 | Ports | Not started |
 | 6 | Plugin system | Not started |
