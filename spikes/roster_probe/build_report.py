@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import html
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -45,19 +46,100 @@ def esc(value: object) -> str:
     return html.escape(str(value))
 
 
+def load_chain_records() -> list[dict[str, object]]:
+    """Every artist traced so far, read from the per-artist cache.
+
+    Reads the cache directory rather than ``chain_results.json`` because that
+    summary file is only written when a full pass completes. During a long run
+    the cache is the live picture, and a report that silently understates the
+    result because a batch is still in flight is worse than no report.
+    """
+    cache_dir = OUT / "chain"
+    if not cache_dir.is_dir():
+        return []
+    records = []
+    for path in sorted(cache_dir.glob("*.json")):
+        try:
+            records.append(json.loads(path.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, OSError):
+            continue  # a file mid-write; the next build picks it up
+    return records
+
+
+FREEMAIL = {
+    "gmail.com",
+    "googlemail.com",
+    "yahoo.com",
+    "hotmail.com",
+    "outlook.com",
+    "live.com",
+    "icloud.com",
+    "me.com",
+    "gmx.de",
+    "gmx.net",
+    "web.de",
+    "free.fr",
+    "orange.fr",
+    "libero.it",
+    "protonmail.com",
+    "aol.com",
+}
+
+
+def _name_tokens(name: str) -> set[str]:
+    """Lowercase alphabetic name parts long enough to match against a domain."""
+    return {
+        re.sub(r"[^a-z]", "", part.lower())
+        for part in name.split()
+        if len(re.sub(r"[^a-z]", "", part.lower())) >= 4
+    }
+
+
+def belongs_to_the_artist(email: str, own_domain: str | None, artist_name: str) -> bool:
+    """Strict test that an address is the artist's own.
+
+    ``classify_ownership`` rules out organizations and vendors. This adds the
+    positive requirement, because ruling out the known-bad is not the same as
+    establishing the good: ``wesleysnipes@artforum.com`` survived every negative
+    check simply because *artforum.com* is a magazine nobody had listed.
+
+    One of two things must hold:
+
+    * the mail domain carries part of the artist's name — her own domain; or
+    * it is a consumer mail provider reached from a site that carries her name,
+      which is how most individual artists publish an address.
+    """
+    domain = email.partition("@")[2].lower()
+    tokens = _name_tokens(artist_name)
+    if not tokens:
+        return False
+
+    flat_domain = re.sub(r"[^a-z]", "", domain.split(".")[0])
+    if any(token in flat_domain or flat_domain in token for token in tokens):
+        return True
+
+    if domain in FREEMAIL and own_domain:
+        flat_site = re.sub(r"[^a-z]", "", own_domain.lower())
+        local = re.sub(r"[^a-z]", "", email.partition("@")[0].lower())
+        return any(token in flat_site for token in tokens) or any(
+            token in local for token in tokens
+        )
+
+    return False
+
+
 def load_completed() -> list[dict[str, object]]:
     """Build the completed-lead list from the chain results."""
-    path = OUT / "chain_results.json"
-    if not path.is_file():
-        return []
-
     completed: list[dict[str, object]] = []
-    for record in json.loads(path.read_text(encoding="utf-8")):
-        if record["artist_name"].lower() in KNOWN_NON_ARTISTS:
+    for record in load_chain_records():
+        name = str(record["artist_name"])
+        if name.lower() in KNOWN_NON_ARTISTS:
             continue
         own_domain = record.get("own_domain")
         for email in record.get("emails") or []:
             if classify_ownership(email, own_domain) != "artist_owned":
+                continue
+            if not belongs_to_the_artist(email, own_domain, name):
                 continue
             verdict = verify(email, artist_domain=own_domain, found_via="own_contact_page")
             if verdict["confidence_band"] not in {"high", "medium"}:
@@ -79,6 +161,45 @@ def load_completed() -> list[dict[str, object]]:
     return completed
 
 
+def load_awaiting_contact(limit: int = 14) -> list[dict[str, object]]:
+    """Artists reached and identified, but with no verified address of their own.
+
+    Outcome 2 in the business contract. These are not failures: they are real
+    artists we can name and evidence, held until a later run finds a direct
+    address. Showing them alongside the completed leads is what makes the funnel
+    legible — and each row is spot-checkable in the same way.
+    """
+    completed_names = {row["name"] for row in load_completed()}
+    awaiting: list[dict[str, object]] = []
+
+    for record in load_chain_records():
+        name = str(record["artist_name"])
+        if name in completed_names or name.lower() in KNOWN_NON_ARTISTS:
+            continue
+
+        emails = record.get("emails") or []
+        gallery = next(
+            (
+                email
+                for email in emails
+                if classify_ownership(email, record.get("own_domain")) == "gallery"
+            ),
+            None,
+        )
+        awaiting.append(
+            {
+                "name": name,
+                "status": "Gallery contact only" if gallery else "No public address yet",
+                "gallery_email": gallery or "—",
+                "profile_url": record["profile_url"],
+                "organization": record["source_organization"],
+            }
+        )
+
+    awaiting.sort(key=lambda row: (row["status"] != "Gallery contact only", str(row["name"])))
+    return awaiting[:limit]
+
+
 def load_counts() -> dict[str, int]:
     """Counts derived from the discovery and chain artefacts."""
     counts = {"organizations": 0, "with_website": 0, "discovered": 0, "chained": 0}
@@ -94,10 +215,7 @@ def load_counts() -> dict[str, int]:
         with csv_path.open(encoding="utf-8-sig") as handle:
             counts["discovered"] = sum(1 for _ in csv.DictReader(handle))
 
-    chain = OUT / "chain_results.json"
-    if chain.is_file():
-        counts["chained"] = len(json.loads(chain.read_text(encoding="utf-8")))
-
+    counts["chained"] = len(load_chain_records())
     return counts
 
 
@@ -140,6 +258,7 @@ PHASES = [
 def build() -> str:
     """Render the full report."""
     completed = load_completed()
+    awaiting = load_awaiting_contact()
     counts = load_counts()
     orgs = load_org_table()
     tests = test_count()
@@ -159,6 +278,18 @@ def build() -> str:
           <td class="org">{esc(row["organization"])}</td>
         </tr>"""
         for index, row in enumerate(completed, 1)
+    )
+
+    awaiting_rows = "\n".join(
+        f"""<tr>
+          <td class="n">{index}</td>
+          <td><strong>{esc(row["name"])}</strong></td>
+          <td>{esc(row["status"])}</td>
+          <td class="mono">{esc(row["gallery_email"])}</td>
+          <td class="src"><a href="{esc(row["profile_url"])}" target="_blank" rel="noopener">profile&nbsp;&#8599;</a></td>
+          <td class="org">{esc(row["organization"])}</td>
+        </tr>"""
+        for index, row in enumerate(awaiting, 1)
     )
 
     org_rows = "\n".join(
@@ -268,7 +399,30 @@ def build() -> str:
   .bar {{ height:6px; background:#eae4dc; border-radius:3px; overflow:hidden; margin:8px 0 26px; }}
   .bar i {{ display:block; height:100%; background:var(--accent); width:{pct}%; }}
   .two {{ display:grid; grid-template-columns:1fr 1fr; gap:36px; }}
-  @media (max-width:820px) {{ .two {{ grid-template-columns:1fr; }} h1 {{ font-size:32px; }} }}
+  .funnel {{ display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; margin-bottom:14px; }}
+  .fstep {{
+    flex:1 1 150px; background:#fff; border:1px solid var(--line); border-radius:3px;
+    padding:18px 16px; text-align:center;
+  }}
+  .fstep.hero {{ background:var(--ink); border-color:var(--ink); color:#fff; }}
+  .fv {{ display:block; font-size:30px; font-weight:700; letter-spacing:-.02em; }}
+  .fl {{
+    display:block; margin-top:6px; font:600 10px/1.4 ui-sans-serif,system-ui,sans-serif;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+  }}
+  .fstep.hero .fl {{ color:#c9c2ba; }}
+  .farrow {{ align-self:center; color:var(--muted); font-size:20px; }}
+  .card {{ background:#fff; border:1px solid var(--line); border-radius:3px; padding:20px 22px; }}
+  .cardhead {{
+    font:600 11px ui-sans-serif,system-ui,sans-serif; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--accent); margin-bottom:12px;
+  }}
+  ul.ev {{ margin:0; padding-left:18px; }}
+  ul.ev li {{ margin-bottom:7px; font-size:15px; }}
+  @media (max-width:820px) {{
+    .two {{ grid-template-columns:1fr; }} h1 {{ font-size:32px; }}
+    .farrow {{ display:none; }}
+  }}
   footer {{ margin-top:64px; padding-top:22px; border-top:1px solid var(--line);
     font:13px ui-sans-serif,system-ui,sans-serif; color:var(--muted); }}
 </style>
@@ -344,6 +498,66 @@ def build() -> str:
       <p>Counting them would have made this report look roughly three times
       better and would have been wrong.</p>
     </div>
+  </div>
+</div>
+
+<h2>Identified, awaiting a direct address</h2>
+<p>Real artists we can name and evidence, held for a later pass. Reaching a
+   gallery is not the same as reaching the artist, so none of these count toward
+   the headline figure — but none are discarded either.</p>
+<div class="scroll">
+<table>
+  <thead><tr>
+    <th></th><th>Artist</th><th>Status</th><th>Gallery contact</th>
+    <th>Evidence</th><th>Found via</th>
+  </tr></thead>
+  <tbody>
+{awaiting_rows or '<tr><td colspan="6" style="padding:22px;color:#6b6560">None recorded.</td></tr>'}
+  </tbody>
+</table>
+</div>
+
+<h2>The funnel, on this run</h2>
+<div class="funnel">
+  <div class="fstep"><span class="fv">{counts["organizations"]}</span>
+    <span class="fl">Organizations in the sheet</span></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><span class="fv">{counts["discovered"]}</span>
+    <span class="fl">Artists discovered</span></div>
+  <div class="farrow">→</div>
+  <div class="fstep"><span class="fv">{counts["chained"]}</span>
+    <span class="fl">Traced for contact</span></div>
+  <div class="farrow">→</div>
+  <div class="fstep hero"><span class="fv">{len(completed)}</span>
+    <span class="fl">Completed leads</span></div>
+</div>
+<p style="color:var(--muted);font-size:14px">
+  Only a sample was traced for contact — tracing is the slow step, and the
+  purpose of this run was to measure the rate rather than exhaust the list.
+  That rate is what tells us what the full sheet is worth.</p>
+
+<h2>What we know about each artist beyond her address</h2>
+<p>Contact detail makes the message possible; the rest makes it worth reading.
+   This is real material read from one lead's own pages — it is what
+   personalised outreach is written from.</p>
+<div class="two">
+  <div class="card">
+    <div class="cardhead">Bianca Severijns — exhibition record</div>
+    <ul class="ev">
+      <li>Shanghai International Paper Art Biennale — 2021, 2023</li>
+      <li>Tel Aviv Biennale of Craft &amp; Design — 2020, 2023</li>
+      <li>Venice Art Biennial catalogue — 2019</li>
+      <li>Working since 1964 · active through 2026</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="cardhead">Press and profile</div>
+    <ul class="ev">
+      <li>Fiber Art Now, Spring 2024</li>
+      <li>Art Market Magazine #47 — cover feature</li>
+      <li>Haaretz Designer #57</li>
+      <li>Own website, Instagram, and full CV captured</li>
+    </ul>
   </div>
 </div>
 

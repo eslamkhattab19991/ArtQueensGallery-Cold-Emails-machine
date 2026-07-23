@@ -14,6 +14,7 @@ import csv
 import json
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).parent))
 from verify import verify
@@ -44,14 +45,49 @@ VENDOR_DOMAINS = {
 }
 
 
+def _seed_domains() -> set[str]:
+    """Every host that appears as a source organization in the seed sheet.
+
+    Loaded from the sheet rather than hard-coded, because the failure this
+    guards against is general: any of the 192 organizations can publish its own
+    address on an artist's profile page.
+    """
+    seeds = Path(__file__).parent / "out" / "seeds.json"
+    if not seeds.is_file():
+        return set()
+    hosts: set[str] = set()
+    for row in json.loads(seeds.read_text(encoding="utf-8")):
+        website = row.get("website")
+        if website:
+            hosts.add(urlparse(website).netloc.lower().removeprefix("www."))
+    return hosts
+
+
+#: Computed once: the organization hosts that must never be mistaken for an
+#: artist's own domain.
+ORGANIZATION_DOMAINS = _seed_domains() | GALLERY_DOMAINS
+
+
 def classify_ownership(email: str, own_domain: str | None) -> str:
     """Decide whose address this is — the heart of ARCHITECTURE.md §4.5.4."""
     domain = email.partition("@")[2].lower()
 
     if domain in VENDOR_DOMAINS:
         return "aggregator"
-    if domain in GALLERY_DOMAINS:
+
+    # Checked before the own-domain test, not after. An earlier version trusted
+    # `own_domain` first and classified 14 copies of info@artloving.net as
+    # artist-owned — the gallery's own address, reported as fourteen separate
+    # leads. Any host that appears in the seed sheet is an organization,
+    # whatever the artist's page seemed to say.
+    if domain in ORGANIZATION_DOMAINS:
         return "gallery"
+
+    if own_domain and own_domain.lower() in ORGANIZATION_DOMAINS:
+        # The detector fell back to the organization's host, so we do not
+        # actually know the artist has a site of her own.
+        return "unknown"
+
     if own_domain and domain in own_domain.lower():
         return "artist_owned"
     # A free-provider address published on the artist's own contact page is the
