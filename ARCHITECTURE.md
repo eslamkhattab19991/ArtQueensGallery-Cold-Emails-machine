@@ -1,17 +1,89 @@
 # Artist Prospecting System — Architecture (MVP)
 
-Status: **revision 3 — ready for implementation pending final approval**.
+Status: **revision 4 — approved; implementation in progress**.
 
 Revision history:
 - **r1** — full 9-stage pipeline, hexagonal architecture, JSONL bus
 - **r2** — reduced to 7 stages + Personalization Context; email pre-filter removed; art platforms demoted to evidence sources; paid verification replaced with a confidence model
 - **r3** — Contact Discovery redesigned as a pluggable parallel engine; gallery addresses reclassified as indirect and excluded from the leads dataset; provenance formalized as a system-wide invariant
+- **r4** — business contract made explicit (§0): a lead is a name plus a verified email, everything else is enrichment. Three terminal outcomes replace four export files; the primary KPI is Completed Leads. Personalization narrowed to completed leads only. Qualification gate restated as an absolute ICP precondition (§4.5.0).
+
+---
+
+## 0. The Business Contract *(r4)*
+
+Everything below exists to serve one measurement.
+
+> **The primary KPI is the number of Completed Leads.**
+> Not artists discovered, not pages crawled, not records enriched.
+
+### What makes a lead complete
+
+A lead is **COMPLETE** when — and only when — it has both:
+
+| Required | |
+|---|---|
+| **Artist name** | A resolved full name |
+| **Verified public email** | An artist-owned address that passed verification (see below) |
+
+Everything else — website, Instagram, country, biography, artist statement,
+exhibitions, representation, qualification score, provenance — is **enrichment**.
+Enrichment is genuinely valuable: it is what raises reply rates and conversion.
+But it improves a lead that already exists. It never creates one.
+
+### The three terminal outcomes
+
+Every record that enters the pipeline ends in exactly one of these. There is no
+fourth state and no record that ends in none of them.
+
+| # | Outcome | Condition | Export |
+|---|---|---|---|
+| 1 | **COMPLETED LEAD** | Passed the ICP · has a verified artist-owned email | `completed_leads.csv` |
+| 2 | **QUALIFIED, NO CONTACT** | Passed the ICP · no verified artist email after every contact source was exhausted | `qualified_without_email.csv` |
+| 3 | **REJECTED** | Failed one or more ICP requirements | `rejected_candidates.csv` |
+
+Outcome 2 is **not a failure**. It is a qualified artist held for future
+enrichment: contact pages appear, artists launch websites, directories get
+indexed. These records are retained in the master file with a retry date and
+re-attempted on later runs. Over time, outcome 2 is the pool that outcome 1
+grows from.
+
+### Where gallery-only contacts land
+
+An artist for whom only a gallery or institutional address was found is
+**outcome 2, not outcome 1** — a gallery address is not the artist's verified
+public email, so the lead is not complete by the definition above.
+
+Such records carry `contact_status = "indirect"` and a populated `gallery_email`
+column inside `qualified_without_email.csv`, which keeps the gallery-mediated
+approach available as a distinct outreach motion (§4.5.5) without ever counting
+it toward the KPI. Filtering that file on `contact_status` separates "has a
+gallery route" from "has nothing at all".
+
+### What "verified" means without a paid service
+
+Revision 2 ruled out paid verification for the MVP, so "verified" cannot mean an
+SMTP probe. It means: **syntax valid, domain resolves with an MX record, not
+disposable or parked, and a confidence score at or above a configured floor**
+(§4.6).
+
+That floor is the single number converting engineering output into the business
+KPI, so it lives in `config/icp.yaml` as `min_email_confidence_band`, not in
+code. **Default: `medium`.** Rationale: `high` alone would exclude legitimate
+addresses found by open-web search and depress the KPI on conservative evidence;
+`low` would risk bounces against an unwarmed sending domain. Both bands are
+exported, so outreach can still send `high` first and treat `medium` as a second
+wave. Once real bounce data exists, tune the floor rather than the code.
+
+Role accounts (`studio@`, `info@`) **do** count as verified when they are
+artist-owned — for working artists these are frequently the only published
+address, and often the one actually read.
 
 ---
 
 ## 1. Design Principles
 
-1. **Quality over volume.** The unit of value is a qualified, enriched artist record, not an email address.
+1. **A lead is a name plus a verified email; everything else is enrichment.** Enrichment improves a lead that exists — it never creates one. The KPI counts completed leads. *(r4)*
 2. **Providers are replaceable.** Search, crawl, LLM, DNS, and every contact source sit behind ports. Swapping one touches one adapter file.
 3. **Every stage is resumable and idempotent.** A crash at stage 6 never re-pays for stages 1–5.
 4. **Deterministic code filters; the LLM judges.** Rules are code. Inference is the model's job.
@@ -162,10 +234,10 @@ artqueens-prospecting/
 │   │   ├── artists.jsonl             # the durable cross-run asset
 │   │   └── suppression.csv
 │   └── exports/<run_id>/
-│       ├── qualified_leads.csv       # DIRECT artist contacts only
-│       ├── indirect_contacts.csv     # gallery-only — separate motion
-│       ├── unreachable.csv           # qualified, no contact found
-│       └── rejected.csv              # failed the ICP
+│       ├── completed_leads.csv               # OUTCOME 1 — the KPI
+│       ├── qualified_without_email.csv       # OUTCOME 2 — incl. gallery-only
+│       ├── rejected_candidates.csv           # OUTCOME 3 — failed the ICP
+│       └── statistics.json                   # KPI-led run metrics
 │
 └── tests/
     ├── unit/
@@ -233,7 +305,7 @@ Email presence is **not** a hard filter — qualification is about fit; reachabi
 
 Weights live in `icp.yaml`. **Financial capability remains absent as a separate axis** — every public proxy for it is already counted above, and scoring it separately double-weights career momentum while overstating the rubric's rigour.
 
-Output: score 0–100, tier (A ≥ 75 / B 55–74 / C 40–54 / reject < 40), written reasoning, per-signal evidence. Rejects persist to `rejected.csv`.
+Output: score 0–100, tier (A ≥ 75 / B 55–74 / C 40–54 / reject < 40), written reasoning, per-signal evidence. Rejects persist to `rejected_candidates.csv`.
 
 - **Emits:** `QualifiedArtist`. Only A/B/C proceed.
 
@@ -252,7 +324,7 @@ name present, not suppressed — and scored at or above the tier-C threshold.
 Discovery is deliberately permissive: it surfaces male artists, deceased
 artists, prize jurors, and organizations alongside real candidates. That is
 correct behaviour for a discovery stage, and it is precisely why this gate
-exists. An artist who fails qualification is written to `rejected.csv` with the
+exists. An artist who fails qualification is written to `rejected_candidates.csv` with the
 reason and never reaches this stage.
 
 Two consequences, both intended:
@@ -339,11 +411,11 @@ Detection is deterministic first (domain match against the artist's website, dom
 
 | Status | Meaning | Export destination |
 |---|---|---|
-| `direct` | ≥1 `ARTIST_OWNED` candidate found | `qualified_leads.csv` ✅ |
-| `indirect` | Only `GALLERY` / `INSTITUTION` candidates found | `indirect_contacts.csv` — **excluded from the leads dataset** |
-| `exhausted` | All applicable sources ran, nothing usable found | `unreachable.csv`, with `retry_after` |
+| `direct` | ≥1 `ARTIST_OWNED` candidate found, verified at or above the confidence floor | **Outcome 1** — `completed_leads.csv` ✅ |
+| `indirect` | Only `GALLERY` / `INSTITUTION` candidates found | **Outcome 2** — `qualified_without_email.csv`, with `gallery_email` populated |
+| `exhausted` | All applicable sources ran, nothing usable found | **Outcome 2** — `qualified_without_email.csv`, with `retry_after` |
 
-**Per your requirement: an indirect contact is never a successful artist contact.** It does not enter `qualified_leads.csv`, it is not counted in the run's success metrics, and it is stored in a distinct `gallery_email` field — never in `email`. A gallery-mediated approach is a different business motion with different copy and a different sender; conflating the two would corrupt both your outreach and your conversion measurement.
+**Per your requirement: an indirect contact is never a successful artist contact.** It does not enter `completed_leads.csv`, it does not count toward the KPI, and it is stored in a distinct `gallery_email` field — never in `email`. A gallery-mediated approach is a different business motion with different copy and a different sender; conflating the two would corrupt both your outreach and your conversion measurement.
 
 Artists at `indirect` or `exhausted` are **retained in the master file** with their status and retry date. They remain qualified assets — future runs re-attempt after a configurable cooldown, since artists add contact pages over time.
 
@@ -377,7 +449,24 @@ Bands: **High ≥ 80** · **Medium 55–79** · **Low 30–54** · **Reject < 30
 
 ### 4.7 Stage 6b — Personalization Context
 
-Runs on every artist that reaches it — **including those whose email was found in tier 0**. Finding an email early never skips enrichment; this context is a permanent part of the artist record.
+**Runs only on records that reached COMPLETED status** — a verified,
+artist-owned email is the entry condition. *(changed in r4)*
+
+Two rules that look contradictory but are not:
+
+- **Finding an email early never skips enrichment.** An artist whose address
+  came from tier 0 is enriched exactly as thoroughly as one who needed all four
+  tiers. This context is a permanent part of the artist record, not a
+  by-product of the send (your r2 requirement, unchanged).
+- **An artist with no verified email is not enriched yet.** Personalization
+  exists to raise reply rates on messages we can actually send. Spending the
+  most expensive stage in the pipeline on a record that cannot be contacted
+  buys nothing today, and the material would be stale by the time that artist
+  becomes reachable.
+
+Outcome-2 records therefore carry whatever Extraction already captured, and are
+enriched on the future run where contact discovery finally succeeds — at which
+point the enrichment is both useful and current.
 
 **Evidence sources** (routed by `evidence_router.py` from links already on the profile): the artist's own `/cv`, `/exhibitions`, `/press`, `/statement`, `/news`; Artsy, Saatchi Art, MutualArt, ArtFacts profiles; gallery representation pages; press coverage.
 
@@ -392,10 +481,31 @@ Runs on every artist that reaches it — **including those whose email was found
 - Assembles the GDPR record per lead from carried provenance: source URL, collection timestamp, lawful basis (legitimate interest — B2B outreach to a publicly listed professional artist), retention clock.
 - Final suppression check immediately before write.
 - Enforces `source_url` present — **Required, not Preferred**. Most priority countries are EU/UK; without it there is no lawful-basis evidence and no way to answer a data-subject request.
-- **Enforces the ownership invariant:** any record whose `contact_status != "direct"` is structurally barred from `qualified_leads.csv`. This is an assertion in code, not a filter condition — a bug elsewhere must fail loudly rather than leak a gallery address into the leads file.
-- Writes four files: `qualified_leads.csv`, `indirect_contacts.csv`, `unreachable.csv`, `rejected.csv`.
+- **Assigns each record its terminal outcome** (§0) and writes it to exactly one
+  of the three outcome files. Assignment is total and mutually exclusive: the
+  exporter asserts that every record it received landed in exactly one file, so
+  a record that somehow matches no outcome — or two — fails the run rather than
+  vanishing from the reporting.
+- **Enforces the completeness invariant:** a record reaches
+  `completed_leads.csv` only if it has a resolved name **and** an email whose
+  `ownership == ARTIST_OWNED` **and** whose confidence band meets
+  `min_email_confidence_band`. This is an assertion in code, not a filter
+  condition — a bug elsewhere must fail loudly rather than quietly inflate the
+  headline KPI or leak a gallery address into the leads file.
+- Writes three outcome files: `completed_leads.csv`,
+  `qualified_without_email.csv`, `rejected_candidates.csv`.
 - Upserts into `data/master/artists.jsonl`.
-- Writes the run manifest: per-stage counts, funnel conversion, cost breakdown, **per-source yield metrics**.
+- Writes the run manifest and `statistics.json`, both **led by the KPI**:
+  completed leads this run, completed leads total in the master file, and the
+  conversion rate from discovered → qualified → completed. Per-stage counts,
+  cost breakdown, and per-source yield follow as diagnostics explaining that
+  number.
+
+**On reporting.** The run report opens with the number of completed leads. Every
+other figure in it exists to explain why that number is what it is — which
+stage lost the most records, which contact source produced the most verified
+addresses, which organizations yielded nothing. A report that leads with
+"discovered 4,200 artists" is measuring the wrong thing.
 
 ---
 
@@ -742,7 +852,7 @@ Every value field is a `Field[T]` (§6).
 
 ### Stage 7 — Export files
 
-**`qualified_leads.csv`** — `contact_status == "direct"` only:
+**`completed_leads.csv`** — OUTCOME 1, the KPI. Name + verified artist-owned email:
 ```
 canonical_id, full_name, qualified, qualification_score, tier, rubric_version,
 gender, gender_confidence, country, city, career_stage, career_stage_confidence,
@@ -774,23 +884,44 @@ source_url, provenance_summary, first_seen, last_updated
 > would produce hundreds of columns — but the digest makes a weakly-sourced
 > lead visible without opening the JSONL.
 
-**`indirect_contacts.csv`** — `contact_status == "indirect"`, a separate motion:
+**`qualified_without_email.csv`** — OUTCOME 2. Passed the ICP, no verified
+artist email. Filter on `contact_status` to separate the two sub-cases:
+`indirect` has a gallery route, `exhausted` has nothing.
 ```
-canonical_id, full_name, gallery_email, gallery_name, gallery_source_url,
+canonical_id, full_name, qualified, qualification_score, tier, rubric_version,
+gender, gender_confidence, country, city, career_stage,
+contact_status, gallery_email, gallery_name, gallery_source_url,
 ownership_classification_method, ownership_confidence,
-website, instagram, country, city, career_stage, tier, score,
-recent_activity, hook_1, hook_2, outreach_angle, source_url, last_updated
+website, instagram, linkedin, contact_form_url,
+sources_attempted, sources_skipped, retry_after,
+exhibition_count, solo_count, span_years, latest_exhibition_year,
+source_url, provenance_summary, first_seen, last_updated
 ```
 
-**`unreachable.csv`** — qualified, no contact:
+> Personalization columns are deliberately absent: outcome-2 records are not
+> enriched until they become contactable (§4.7). The columns that *are* here —
+> `sources_attempted`, `retry_after`, `contact_form_url` — are the ones a future
+> run needs in order to retry intelligently rather than repeat work.
+
+**`rejected_candidates.csv`** — OUTCOME 3. Failed one or more ICP requirements:
 ```
-canonical_id, full_name, website, instagram, country, city, tier, score,
-contact_form_url, sources_attempted, retry_after, last_updated
+canonical_id, full_name, reject_reason, failed_filter,
+gender, gender_confidence, country, career_stage, qualification_score,
+website, instagram, source_url, discovered_from_organization, notes, last_updated
 ```
 
-**`rejected.csv`** — failed the ICP:
+> `gender`, `country`, and `career_stage` are exported even on rejection, and
+> that is the point of this file: a rejection you cannot inspect is a rubric you
+> cannot tune. If a run rejects 400 artists for `gender_not_confirmed_female`,
+> the question "were they actually male, or did the classifier fail?" must be
+> answerable from the CSV alone.
+
+**`statistics.json`** — the KPI, then its explanation:
 ```
-canonical_id, full_name, source_url, reject_reason, failed_filter, score, notes
+completed_leads_this_run, completed_leads_total,
+qualified_without_email_this_run, rejected_this_run,
+conversion_discovered_to_qualified, conversion_qualified_to_completed,
+per_stage_counts, per_source_yield, cost_breakdown, elapsed_seconds
 ```
 
 ---
@@ -921,7 +1052,7 @@ Provenance is not a discipline you remember to follow — it's checked:
 
 **Model: `claude-opus-4-8` with adaptive thinking for judgment stages.** Career-stage classification, celebrity-tier detection, and ambiguous ownership calls are the highest-leverage, highest-error-rate decisions in the system. A cost-tiered variant (Haiku 4.5 for page triage, Opus for qualification, ownership, and personalization) is a `providers.yaml` change, not a rewrite. Default to Opus, measure, then split if the numbers justify it.
 
-**Nothing qualified is ever discarded.** `rejected.csv` tunes the rubric; `indirect_contacts.csv` and `unreachable.csv` plus master-file status mean a qualified-but-unreachable artist is retried later rather than lost.
+**Nothing qualified is ever discarded.** `rejected_candidates.csv` tunes the rubric; `qualified_without_email.csv` plus master-file status mean a qualified-but-unreachable artist is retried on a later run rather than lost. Outcome 2 is the pool outcome 1 grows from.
 
 **Per-source metrics from run one.** `observability/source_metrics.py` records yield, cost, and latency per source per run. Without it you cannot know whether `whois` earns its tier — and the pluggable design is only as good as your ability to prune it.
 
@@ -931,7 +1062,8 @@ Provenance is not a discipline you remember to follow — it's checked:
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| **Gallery address leaks into the leads file** | Violates the core rule; corrupts conversion metrics | Ownership classified per candidate in the merge layer (not per source); `contact_status != "direct"` structurally barred from `qualified_leads.csv` by assertion; invariant test asserts no `GALLERY`/`INSTITUTION`/`UNKNOWN` record ever appears there |
+| **Confidence floor set too low to hit a KPI target** | Bounces damage the sending domain, which costs more than the leads gained | `min_email_confidence_band` is config, not code, and every change to it is visible in the run report alongside the KPI it moves; bounces feed back into suppression so the tradeoff becomes measurable rather than theoretical |
+| **Gallery address leaks into the leads file** | Violates the core rule; corrupts conversion metrics | Ownership classified per candidate in the merge layer (not per source); `contact_status != "direct"` structurally barred from `completed_leads.csv` by assertion; invariant test asserts no `GALLERY`/`INSTITUTION`/`UNKNOWN` record ever appears there |
 | **Ownership misclassification (artist domain hosted by gallery)** | Real artist contact dropped to indirect | Deterministic checks first (own-website domain match, `gallery_domains.yaml`, known representation); LLM fallback with page context; `UNKNOWN` routes to review rather than silently choosing |
 | **Parallel sources multiply cost per artist** | Budget | Tiered execution with a stopping condition after each tier; per-artist budget ceiling in `contact/budget.py` with cancellation; expensive sources gated to tier 3 |
 | **One slow source stalls a tier** | Throughput | Per-source timeout; outcomes are values not exceptions; the tier proceeds with whatever returned |
