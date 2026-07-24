@@ -7,13 +7,19 @@ point is the conductor's behaviour, not any stage's logic.
 
 from __future__ import annotations
 
+import json
+import logging
+from collections.abc import Iterator
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
 from prospecting.config.loader import load_settings, resolve_project_root
+from prospecting.config.models.log import LogConfig
 from prospecting.config.models.settings import Settings
 from prospecting.domain.identifiers import RunId
+from prospecting.observability.logger import ROOT_LOGGER_NAME, configure_logging
 from prospecting.pipeline.base import (
     ProcessResult,
     RecordStage,
@@ -30,6 +36,17 @@ from prospecting.schemas.seed import SeedOrganization
 from tests.support.stores import InMemoryStageStore
 
 RUN_ID = RunId("run_test")
+
+
+@pytest.fixture(autouse=True)
+def _reset_logging() -> Iterator[None]:
+    """Restore the shared ``prospecting`` logger after any test that configures it."""
+    yield
+    logger = logging.getLogger(ROOT_LOGGER_NAME)
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+    logger.setLevel(logging.NOTSET)
+    logger.propagate = True
 
 
 def _settings(tmp_path: Path, **env: str) -> Settings:
@@ -222,6 +239,34 @@ class TestBudgetStop:
         # The source ran; the downstream stage never did.
         assert [stage_report.stage for stage_report in report.stages] == [StageName.INPUT]
         assert not store.has_stage(StageName.DISCOVERY)
+
+
+class TestLoggingIntegration:
+    def test_a_run_logs_its_stage_lifecycle_as_json(self, tmp_path: Path) -> None:
+        buffer = StringIO()
+        configure_logging(
+            LogConfig(
+                level="INFO",
+                format="json",
+                progress_every_n_records=25,
+                include_timestamps=False,
+                log_cost_estimates=False,
+            ),
+            stream=buffer,
+        )
+        Orchestrator(
+            stages=_linear_pipeline(),
+            settings=_settings(tmp_path),
+            store=InMemoryStageStore(),
+            run_id=RUN_ID,
+        ).run()
+        messages = [
+            json.loads(line)["message"] for line in buffer.getvalue().splitlines() if line.strip()
+        ]
+        assert "run starting" in messages
+        assert "stage starting" in messages
+        assert "stage finished" in messages
+        assert "run finished" in messages
 
 
 class TestRunReport:

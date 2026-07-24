@@ -28,6 +28,7 @@ to the failure queue and skipped, never allowed to kill the run or its siblings.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
@@ -48,6 +49,8 @@ __all__ = [
     "StageContext",
     "StageReport",
 ]
+
+_LOG = logging.getLogger(__name__)
 
 
 class PreconditionError(Exception):
@@ -195,6 +198,14 @@ class RecordStage[InputT: FrozenModel, OutputT: FrozenModel](ABC):
                 # the run (ARCHITECTURE.md §4.5.1, "failures are values").
                 context.checkpoint.mark_failed(envelope.record_id, repr(exc))
                 failed += 1
+                _LOG.warning(
+                    "record failed",
+                    extra={
+                        "stage": self.name.value,
+                        "record_id": envelope.record_id,
+                        "error": repr(exc),
+                    },
+                )
                 continue
 
             context.store.append(self.name, result.outputs)
@@ -202,6 +213,7 @@ class RecordStage[InputT: FrozenModel, OutputT: FrozenModel](ABC):
             context.budget.record(result.cost)
             processed += 1
             emitted += len(result.outputs)
+            self._report_progress(processed, emitted, context)
 
             if context.budget.exceeded and not context.budget.stop_at_stage_boundary:
                 stopped_by_budget = True
@@ -222,3 +234,25 @@ class RecordStage[InputT: FrozenModel, OutputT: FrozenModel](ABC):
             complete=not stopped_by_budget,
             stopped_by_budget=stopped_by_budget,
         )
+
+    def _report_progress(self, processed: int, emitted: int, context: StageContext) -> None:
+        """Emit a progress line every ``progress_every_n_records``, per LogConfig.
+
+        The cadence and whether running spend is included are configuration, not
+        constants: a stage that costs cents per record wants frequent reassurance
+        with cost; a cheap stage wants a quiet log.
+        """
+        log_config = context.settings.log
+        if processed % log_config.progress_every_n_records != 0:
+            return
+        fields: dict[str, object] = {
+            "stage": self.name.value,
+            "processed": processed,
+            "emitted": emitted,
+        }
+        if log_config.log_cost_estimates:
+            spent = context.budget.spent
+            fields["crawls"] = spent.crawls
+            fields["searches"] = spent.searches
+            fields["llm_calls"] = spent.llm_calls
+        _LOG.info("progress", extra=fields)

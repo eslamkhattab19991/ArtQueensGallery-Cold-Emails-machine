@@ -28,6 +28,7 @@ a broken gate is a bug to surface, not to absorb.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -40,6 +41,8 @@ from prospecting.ports.stage_store import StageStore
 from prospecting.schemas.envelope import CostRecord
 
 __all__ = ["Orchestrator", "PipelineConfigurationError", "RunReport"]
+
+_LOG = logging.getLogger(__name__)
 
 
 class PipelineConfigurationError(Exception):
@@ -139,9 +142,15 @@ class Orchestrator:
         reports: list[StageReport] = []
         stopped_by_budget = False
 
+        _LOG.info("run starting", extra={"run_id": self._run_id, "stages": len(self._stages)})
+
         for stage in self._stages:
             if budget.exceeded:
                 stopped_by_budget = True
+                _LOG.warning(
+                    "budget ceiling reached; stopping before next stage",
+                    extra={"stage": stage.name.value, "breach": budget.first_breach()},
+                )
                 break
 
             checkpoint = CheckpointManager(
@@ -151,9 +160,11 @@ class Orchestrator:
                 resume=self._resume,
             )
             if checkpoint.is_stage_complete():
+                _LOG.info("stage already complete; skipping", extra={"stage": stage.name.value})
                 reports.append(StageReport(stage=stage.name, complete=True, already_complete=True))
                 continue
 
+            _LOG.info("stage starting", extra={"stage": stage.name.value})
             context = StageContext(
                 run_id=self._run_id,
                 settings=self._settings,
@@ -164,11 +175,27 @@ class Orchestrator:
             with checkpoint:
                 report = stage.run(context)
             reports.append(report)
+            _LOG.info(
+                "stage finished",
+                extra={
+                    "stage": stage.name.value,
+                    "processed": report.processed,
+                    "emitted": report.emitted,
+                    "skipped": report.skipped,
+                    "failed": report.failed,
+                    "complete": report.complete,
+                },
+            )
 
             if report.stopped_by_budget:
                 stopped_by_budget = True
+                _LOG.warning("stage stopped by budget", extra={"stage": stage.name.value})
                 break
 
+        _LOG.info(
+            "run finished",
+            extra={"run_id": self._run_id, "stopped_by_budget": stopped_by_budget},
+        )
         return RunReport(
             run_id=self._run_id,
             stages=tuple(reports),

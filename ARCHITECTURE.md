@@ -1026,6 +1026,7 @@ Provenance is not a discipline you remember to follow — it's checked:
 | `scoring/*` | Filters, rubric, tiering, email confidence | Perform lookups |
 | `identity/*` | Blocking, matching, merge conflict resolution | Extract or score |
 | `compliance/*` | Lawful-basis records, suppression | Judge lead quality |
+| `observability/logger` | One config point → structured text/JSON logs for every module | Decide what is worth logging |
 | `observability/source_metrics` | Per-source yield, cost, latency | Alter records or ordering |
 | `config/container` | Wire adapters to ports from config | Contain business logic |
 
