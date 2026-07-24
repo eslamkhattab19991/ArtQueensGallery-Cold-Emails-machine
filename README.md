@@ -111,6 +111,27 @@ This is enforced mechanically by `tests/architecture/` and the Import Linter
 contracts in `pyproject.toml`, not by convention. A change that violates the
 layering fails the test suite.
 
+## Command line
+
+Installing the package (`pip install -e .`) puts the `prospect` command on the
+path:
+
+```bash
+prospect config
+```
+
+```bash
+prospect run
+```
+
+`prospect config` loads, validates, and prints the resolved configuration with
+its provenance — the fastest way to confirm an edit to `config/*.yaml` is
+well-formed before starting a run, with every problem reported at once. `prospect
+run` executes the pipeline for one run; until the provider stages land it reports
+that no stages are wired yet rather than doing nothing silently. `--profile`
+selects a config overlay; `run` also takes `--run-id` (to resume a run) and
+`--no-resume` (to start fresh).
+
 ## Implementation status
 
 Built in reviewed phases; each phase compiles, is tested, and is committed before
@@ -127,7 +148,7 @@ the next begins.
 | 7 | Checkpoint manager — resumable stages | ✅ Complete |
 | 8 | Pipeline engine — orchestrator, gate, budget | ✅ Complete |
 | 9 | Logging system — structured text/JSON | ✅ Complete |
-| 10 | CLI | Not started |
+| 10 | CLI — `prospect` command + composition root | ✅ Complete |
 | 11 | Unit tests across all phases | Ongoing per phase |
 
 Providers follow the core framework, in order: Firecrawl → HTML parser → contact

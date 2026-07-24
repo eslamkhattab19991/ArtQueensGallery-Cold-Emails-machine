@@ -15,7 +15,6 @@ authors = [{ name = "Art Queens Gallery" }]
 # implemented. Declaring dependencies before there is code that imports them
 # produces a lockfile that lies about what the project actually uses.
 #
-#   Phase 10 (CLI) -> typer
 #   Providers      -> firecrawl-py, anthropic, dnspython, openpyxl, httpx
 dependencies = [
     # Phase 2 (configuration) and Phase 3 (domain models).
@@ -25,7 +24,14 @@ dependencies = [
     # order ambiguous. See src/prospecting/config/loader.py.
     "pydantic>=2.10",
     "pyyaml>=6.0",
+    # Phase 10 (CLI). Typer builds the `prospect` command from typed function
+    # signatures, so the argument parsing and the help text stay in one place.
+    "typer>=0.12",
 ]
+
+[project.scripts]
+# The operator-facing entry point: `prospect run`, `prospect config`, ...
+prospect = "prospecting.cli:main"
 
 [project.optional-dependencies]
 dev = [

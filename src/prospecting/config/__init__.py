@@ -17,7 +17,9 @@ A global would be mutable shared state, would make test outcomes depend on
 execution order, and would let any module reach for configuration without
 declaring in its signature that it needs it.
 
-The composition root itself arrives with Phase 5, when there are ports to wire.
+The composition root lives in :mod:`prospecting.config.container`. It is imported
+from there rather than re-exported here, so importing this package stays light —
+loading configuration does not pull in every adapter the container wires.
 """
 
 from prospecting.config.errors import (
