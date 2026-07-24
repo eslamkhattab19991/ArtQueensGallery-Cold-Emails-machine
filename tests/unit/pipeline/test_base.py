@@ -9,6 +9,8 @@ isolation — one bad record not killing its siblings — is tested alongside.
 
 from __future__ import annotations
 
+import json
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,7 @@ from prospecting.config.models.budget import BudgetConfig
 from prospecting.config.models.checkpoint import CheckpointConfig
 from prospecting.config.models.settings import Settings
 from prospecting.domain.identifiers import RunId
+from prospecting.observability.logger import configure_logging
 from prospecting.pipeline.base import (
     PreconditionError,
     ProcessResult,
@@ -309,3 +312,64 @@ class TestProcessResult:
         result: ProcessResult[SeedOrganization] = ProcessResult()
         assert result.outputs == ()
         assert result.cost.is_zero
+
+
+class TestProgressLogging:
+    def test_logs_progress_at_the_configured_cadence_with_running_cost(
+        self, tmp_path: Path
+    ) -> None:
+        settings = load_settings(
+            environ={
+                "PROSPECTING__LOG__FORMAT": "json",
+                "PROSPECTING__LOG__LEVEL": "INFO",
+                "PROSPECTING__LOG__PROGRESS_EVERY_N_RECORDS": "1",
+                "PROSPECTING__LOG__LOG_COST_ESTIMATES": "true",
+            }
+        )
+        buffer = StringIO()
+        configure_logging(settings.log, stream=buffer)
+
+        store = InMemoryStageStore()
+        _seed_inputs(store, ["A", "B"])
+        checkpoint = CheckpointManager(
+            stage=StageName.DISCOVERY, directory=tmp_path, config=_checkpoint_config()
+        )
+        EchoStage(cost=CostRecord(crawls=1)).run(_context(store, checkpoint, settings=settings))
+
+        progress = [
+            parsed
+            for line in buffer.getvalue().splitlines()
+            if line.strip()
+            for parsed in [json.loads(line)]
+            if parsed["message"] == "progress"
+        ]
+        assert len(progress) == 2
+        # Running spend accumulates across the two records.
+        assert progress[0]["crawls"] == 1
+        assert progress[1]["crawls"] == 2
+
+    def test_progress_omits_cost_when_estimates_are_off(self, tmp_path: Path) -> None:
+        settings = load_settings(
+            environ={
+                "PROSPECTING__LOG__FORMAT": "json",
+                "PROSPECTING__LOG__LEVEL": "INFO",
+                "PROSPECTING__LOG__PROGRESS_EVERY_N_RECORDS": "1",
+                "PROSPECTING__LOG__LOG_COST_ESTIMATES": "false",
+            }
+        )
+        buffer = StringIO()
+        configure_logging(settings.log, stream=buffer)
+
+        store = InMemoryStageStore()
+        _seed_inputs(store, ["A"])
+        checkpoint = CheckpointManager(
+            stage=StageName.DISCOVERY, directory=tmp_path, config=_checkpoint_config()
+        )
+        EchoStage(cost=CostRecord(crawls=1)).run(_context(store, checkpoint, settings=settings))
+
+        progress = next(
+            json.loads(line)
+            for line in buffer.getvalue().splitlines()
+            if line.strip() and json.loads(line)["message"] == "progress"
+        )
+        assert "crawls" not in progress

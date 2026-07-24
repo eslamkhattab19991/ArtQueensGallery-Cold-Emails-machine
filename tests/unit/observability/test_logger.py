@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
+import sys
 from io import StringIO
-
-import pytest
 
 from prospecting.config.models.log import LogConfig, LogFormat, LogLevel
 from prospecting.observability.logger import ROOT_LOGGER_NAME, configure_logging
@@ -31,17 +29,6 @@ def make_config(
         include_timestamps=include_timestamps,
         log_cost_estimates=True,
     )
-
-
-@pytest.fixture(autouse=True)
-def _reset_root_logger() -> Iterator[None]:
-    """Restore the shared ``prospecting`` logger after each test."""
-    yield
-    logger = logging.getLogger(ROOT_LOGGER_NAME)
-    for handler in list(logger.handlers):
-        logger.removeHandler(handler)
-    logger.setLevel(logging.NOTSET)
-    logger.propagate = True
 
 
 def _lines(buffer: StringIO) -> list[str]:
@@ -133,3 +120,32 @@ class TestConfiguration:
         configure_logging(make_config(), stream=buffer)
         logging.getLogger("prospecting.pipeline.orchestrator").info("deep")
         assert json.loads(_lines(buffer)[0])["message"] == "deep"
+
+    def test_defaults_to_stderr_when_no_stream_is_given(self) -> None:
+        logger = configure_logging(make_config())
+        handler = logger.handlers[0]
+        assert isinstance(handler, logging.StreamHandler)
+        assert handler.stream is sys.stderr
+
+
+class TestExceptionRendering:
+    """A logged exception must reach the output, in either format."""
+
+    def test_json_carries_the_traceback(self) -> None:
+        buffer = StringIO()
+        configure_logging(make_config(), stream=buffer)
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            logging.getLogger("prospecting.test").exception("failed")
+        parsed = json.loads(_lines(buffer)[0])
+        assert "ValueError" in parsed["exception"]
+
+    def test_text_carries_the_traceback(self) -> None:
+        buffer = StringIO()
+        configure_logging(make_config(log_format="text"), stream=buffer)
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            logging.getLogger("prospecting.test").exception("failed")
+        assert "ValueError" in buffer.getvalue()

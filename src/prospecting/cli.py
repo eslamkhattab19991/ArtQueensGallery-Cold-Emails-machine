@@ -117,10 +117,10 @@ def _print_report(report: RunReport) -> None:
         typer.echo(f"stopped: {report.budget_breach}", err=True)
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover - entry point run by the installed command, not unit tests
     """Console-script entry point for the ``prospect`` command."""
     app()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

@@ -63,6 +63,13 @@ class TestPresence:
             list(JsonlStageStore(directory=tmp_path).read(StageName.INPUT, SeedOrganization)) == []
         )
 
+    def test_blank_lines_are_skipped_on_read(self, tmp_path: Path) -> None:
+        """A stray blank line (a partial last write) must not become an empty record."""
+        line = _envelope("r1", "Alpha").model_dump_json()
+        (tmp_path / "input.jsonl").write_text(f"{line}\n\n", encoding="utf-8")
+        records = list(JsonlStageStore(directory=tmp_path).read(StageName.INPUT, SeedOrganization))
+        assert len(records) == 1
+
 
 class TestSchemaGuard:
     def test_an_incompatible_version_is_refused_on_read(self, tmp_path: Path) -> None:

@@ -175,6 +175,12 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
     "@overload",
+    # A method body that is only `...` is a Protocol or abstract stub — an
+    # interface declaration, never executed. Counting it as an untested line
+    # measures interface surface, not missing tests. The anchored regex matches
+    # a line that is exactly an ellipsis (with an optional trailing comment), so
+    # it cannot catch a docstring that merely ends in "...".
+    "^\\s*\\.\\.\\.\\s*(#.*)?$",
 ]
 
 

@@ -160,6 +160,21 @@ class TestFailures:
         assert not (tmp_path / "discovery" / "failures.jsonl").is_file()
 
 
+class TestIntrospection:
+    def test_enabled_reflects_config(self, tmp_path: Path) -> None:
+        assert make_manager(tmp_path).enabled
+        assert not make_manager(tmp_path, enabled=False).enabled
+
+    def test_resuming_is_true_when_enabled_and_resuming(self, tmp_path: Path) -> None:
+        assert make_manager(tmp_path).resuming
+
+    def test_resuming_is_false_when_disabled(self, tmp_path: Path) -> None:
+        assert not make_manager(tmp_path, enabled=False).resuming
+
+    def test_failures_is_empty_when_none_are_logged(self, tmp_path: Path) -> None:
+        assert make_manager(tmp_path).failures() == ()
+
+
 class TestDisabled:
     def test_nothing_is_recorded_when_disabled(self, tmp_path: Path) -> None:
         manager = make_manager(tmp_path, enabled=False)

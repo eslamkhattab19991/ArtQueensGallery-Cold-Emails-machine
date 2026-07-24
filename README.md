@@ -149,10 +149,13 @@ the next begins.
 | 8 | Pipeline engine — orchestrator, gate, budget | ✅ Complete |
 | 9 | Logging system — structured text/JSON | ✅ Complete |
 | 10 | CLI — `prospect` command + composition root | ✅ Complete |
-| 11 | Unit tests across all phases | Ongoing per phase |
+| 11 | Unit tests across all phases | ✅ Complete (99% coverage) |
 
-Providers follow the core framework, in order: Firecrawl → HTML parser → contact
-discovery engine → search providers → LLM adapters → exporters.
+The framework skeleton (phases 1–11) is complete: 560+ tests, mypy strict, and
+seven architectural boundary contracts, all green. Providers follow, in order:
+Firecrawl → HTML parser → contact discovery engine → search providers → LLM
+adapters → exporters — and with the framework proven against stubs, each one
+slots into a single wiring point.
 
 ## Initial input dataset
 

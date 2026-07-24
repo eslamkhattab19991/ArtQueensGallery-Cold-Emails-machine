@@ -8,8 +8,6 @@ point is the conductor's behaviour, not any stage's logic.
 from __future__ import annotations
 
 import json
-import logging
-from collections.abc import Iterator
 from io import StringIO
 from pathlib import Path
 
@@ -19,7 +17,7 @@ from prospecting.config.loader import load_settings, resolve_project_root
 from prospecting.config.models.log import LogConfig
 from prospecting.config.models.settings import Settings
 from prospecting.domain.identifiers import RunId
-from prospecting.observability.logger import ROOT_LOGGER_NAME, configure_logging
+from prospecting.observability.logger import configure_logging
 from prospecting.pipeline.base import (
     ProcessResult,
     RecordStage,
@@ -36,17 +34,6 @@ from prospecting.schemas.seed import SeedOrganization
 from tests.support.stores import InMemoryStageStore
 
 RUN_ID = RunId("run_test")
-
-
-@pytest.fixture(autouse=True)
-def _reset_logging() -> Iterator[None]:
-    """Restore the shared ``prospecting`` logger after any test that configures it."""
-    yield
-    logger = logging.getLogger(ROOT_LOGGER_NAME)
-    for handler in list(logger.handlers):
-        logger.removeHandler(handler)
-    logger.setLevel(logging.NOTSET)
-    logger.propagate = True
 
 
 def _settings(tmp_path: Path, **env: str) -> Settings:
@@ -95,20 +82,24 @@ class CountingSource:
 
 
 class PassThrough(RecordStage[SeedOrganization, SeedOrganization]):
-    """A record stage that advances each record unchanged."""
+    """A record stage that advances each record unchanged, at a fixed cost."""
 
     input_type = SeedOrganization
 
-    def __init__(self, *, name: StageName, reads: StageName) -> None:
-        """Run as ``name``, reading the output of ``reads``."""
+    def __init__(
+        self, *, name: StageName, reads: StageName, cost: CostRecord | None = None
+    ) -> None:
+        """Run as ``name``, reading ``reads``, charging ``cost`` per record."""
         self.name = name
         self.reads = reads
+        self._cost = cost or CostRecord()
 
     def process_record(
         self, envelope: StageEnvelope[SeedOrganization], context: StageContext
     ) -> ProcessResult[SeedOrganization]:
         del context
-        return ProcessResult(outputs=(envelope.advance(stage=self.name, payload=envelope.payload),))
+        output = envelope.advance(stage=self.name, payload=envelope.payload)
+        return ProcessResult(outputs=(output,), cost=self._cost)
 
 
 def _linear_pipeline() -> list[Stage]:
@@ -239,6 +230,32 @@ class TestBudgetStop:
         # The source ran; the downstream stage never did.
         assert [stage_report.stage for stage_report in report.stages] == [StageName.INPUT]
         assert not store.has_stage(StageName.DISCOVERY)
+
+    def test_a_stage_stopping_mid_way_stops_the_run(self, tmp_path: Path) -> None:
+        """The other budget path: a record stage exhausts the ceiling part-way."""
+        settings = _settings(
+            tmp_path,
+            PROSPECTING__BUDGET__MAX_CRAWLS_PER_RUN="2",
+            PROSPECTING__BUDGET__STOP_AT_STAGE_BOUNDARY="false",
+        )
+        stages: list[Stage] = [
+            CountingSource(count=3),
+            PassThrough(name=StageName.DISCOVERY, reads=StageName.INPUT, cost=CostRecord(crawls=5)),
+        ]
+        report = Orchestrator(
+            stages=stages,
+            settings=settings,
+            store=InMemoryStageStore(),
+            run_id=RUN_ID,
+        ).run()
+        assert report.stopped_by_budget
+        assert not report.all_stages_complete
+        discovery = next(
+            stage_report
+            for stage_report in report.stages
+            if stage_report.stage is StageName.DISCOVERY
+        )
+        assert discovery.stopped_by_budget
 
 
 class TestLoggingIntegration:
