@@ -1,0 +1,63 @@
+# Pluggable contact-discovery sources — ARCHITECTURE.md §4.5.
+#
+# Contact discovery is an open set of sources, each behind the ContactSource
+# port. This file is the operator's control panel for them: which run, in which
+# cost tier, and for how long before the engine cancels them. Adding a new
+# source is one implementation file plus one entry here — no engine change.
+#
+# A source declared here is INERT until its implementation is registered with
+# the registry by the composition root. `enabled: true` expresses intent; the
+# implementation landing is what makes it take effect. The registry fails loudly
+# if this file enables a source that has no implementation, so an unbuilt source
+# left enabled here is caught at startup, never run silently as a no-op.
+#
+# Tiers run in sequence (CACHED -> CHEAP -> MODERATE -> EXPENSIVE); sources
+# within a tier run in parallel. The engine stops early once a high-confidence
+# artist-owned address is found, so the cheap tiers usually answer first and the
+# expensive ones only run on exhaustion (§4.5.2).
+
+contact_sources:
+  # Applied to any source that does not set its own value below.
+  defaults:
+    timeout_seconds: 30.0
+
+  sources:
+    # Tier 0 — CACHED. Free: reuses content already fetched in extraction.
+    cached_page:
+      enabled: true
+      tier: CACHED
+
+    # Tier 1 — CHEAP. The artist's own site: the likeliest direct address.
+    artist_website:
+      enabled: true
+      tier: CHEAP
+    mailto_scan:
+      enabled: true
+      tier: CHEAP
+
+    # Tier 2 — MODERATE. Costs a search query or an LLM call each.
+    site_scoped_search:
+      enabled: true
+      tier: MODERATE
+    open_web_search:
+      enabled: true
+      tier: MODERATE
+    pdf_document:
+      enabled: true
+      tier: MODERATE
+    social_profile:
+      enabled: true
+      tier: MODERATE
+
+    # Tier 3 — EXPENSIVE. Run only on exhaustion of the cheaper tiers.
+    # gallery_page can only ever yield an INDIRECT contact, so it sits last:
+    # it must never run while a direct address is still plausibly findable.
+    public_directory:
+      enabled: true
+      tier: EXPENSIVE
+    whois:
+      enabled: true
+      tier: EXPENSIVE
+    gallery_page:
+      enabled: true
+      tier: EXPENSIVE

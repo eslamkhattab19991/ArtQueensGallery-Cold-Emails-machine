@@ -123,7 +123,7 @@ the next begins.
 | 3 | Domain models | ✅ Complete |
 | 4 | Schemas — stage-boundary contracts | ✅ Complete |
 | 5 | Ports — abstract capability contracts | ✅ Complete |
-| 6 | Plugin system | Not started |
+| 6 | Plugin system — contact-source registry | ✅ Complete |
 | 7 | Checkpoint manager | Not started |
 | 8 | Pipeline engine | Not started |
 | 9 | Logging system | Not started |

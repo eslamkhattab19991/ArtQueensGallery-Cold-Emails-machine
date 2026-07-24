@@ -40,6 +40,7 @@ __all__ = ["CONFIG_FILES", "PROFILES_SUBDIR", "load_settings", "resolve_project_
 CONFIG_FILES: Final[tuple[str, ...]] = (
     "runtime.yaml",
     "icp.yaml",
+    "contact_sources.yaml",
 )
 
 #: Profile overlays live here, one file per profile: ``config/profiles/dev.yaml``.

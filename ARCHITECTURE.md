@@ -367,6 +367,8 @@ ContactSource:
 
 Adding a browser-agent source later means one new file implementing this interface plus a line in `contact_sources.yaml`. No engine change, no pipeline change. That is the extensibility you asked for.
 
+The **registry** (`contact/registry.py`) is what enforces that contract. It is handed the registered source implementations and the `ContactSourcesConfig`, and it *reconciles* the two at startup: a source enabled in config with no implementation, or an implementation with no config entry, stops the run with a message naming the source — never a silent no-op. Registration is explicit (sources are passed in by the composition root), not auto-discovery, to keep "which sources exist" deterministic and readable. This is the one business-layer module that reads `config/` models directly, because its declared job is precisely to *enable sources from config* (§7). A source's `tier` is a code-level default; `contact_sources.yaml` is authoritative and overrides it, which is what makes the source set reorderable purely by configuration.
+
 #### 4.5.2 Execution model: tiered parallel
 
 Fully parallel execution of all nine sources would be maximally fast and maximally wasteful — you'd pay for a WHOIS lookup and three search queries on an artist whose contact page answers in one cached read. Fully sequential is cheap but slow and, as you noted, rigid.

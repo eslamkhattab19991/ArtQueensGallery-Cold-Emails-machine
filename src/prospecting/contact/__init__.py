@@ -10,5 +10,8 @@ config entry — the engine, the merge layer, and the pipeline stay untouched.
 Dependency rule
 ---------------
 Depends on ``prospecting.ports`` and ``prospecting.domain``, never on concrete
-adapters.
+adapters. The registry additionally reads ``prospecting.config`` models — its
+declared responsibility is to "enable sources from config" (ARCHITECTURE.md §7),
+so it consumes the typed ``ContactSourcesConfig`` directly rather than having
+settings threaded through as loose primitives.
 """

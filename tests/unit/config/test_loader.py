@@ -83,6 +83,19 @@ icp:
     tier_c: 40.0
 """
 
+MINIMAL_CONTACT_SOURCES = """
+contact_sources:
+  defaults:
+    timeout_seconds: 30.0
+  sources:
+    artist_website:
+      enabled: true
+      tier: CHEAP
+    whois:
+      enabled: false
+      tier: EXPENSIVE
+"""
+
 
 @pytest.fixture
 def config_dir(tmp_path: Path) -> Path:
@@ -91,6 +104,7 @@ def config_dir(tmp_path: Path) -> Path:
     directory.mkdir()
     (directory / "runtime.yaml").write_text(MINIMAL_RUNTIME, encoding="utf-8")
     (directory / "icp.yaml").write_text(MINIMAL_ICP, encoding="utf-8")
+    (directory / "contact_sources.yaml").write_text(MINIMAL_CONTACT_SOURCES, encoding="utf-8")
     (directory / "profiles").mkdir()
     return directory
 
@@ -113,6 +127,7 @@ class TestBaselineLoad:
         assert settings.meta.files_loaded == (
             config_dir / "runtime.yaml",
             config_dir / "icp.yaml",
+            config_dir / "contact_sources.yaml",
         )
         assert settings.meta.profile is None
         assert settings.meta.environment_overrides == ()

@@ -9,6 +9,7 @@ from pydantic import Field
 from prospecting.config.models.base import FrozenConfig
 from prospecting.config.models.budget import BudgetConfig
 from prospecting.config.models.checkpoint import CheckpointConfig
+from prospecting.config.models.contact_sources import ContactSourcesConfig
 from prospecting.config.models.icp import IcpConfig
 from prospecting.config.models.log import LogConfig
 from prospecting.config.models.paths import PathsConfig
@@ -58,6 +59,9 @@ class Settings(FrozenConfig):
     log: LogConfig = Field(description="Verbosity, format, and progress cadence.")
     budget: BudgetConfig = Field(description="Per-run spending ceilings.")
     icp: IcpConfig = Field(description="The tunable definition of a qualified artist.")
+    contact_sources: ContactSourcesConfig = Field(
+        description="Which pluggable contact sources are enabled, and their tiers and deadlines."
+    )
     meta: LoadMeta = Field(
         default_factory=LoadMeta, description="Provenance of this configuration load."
     )
