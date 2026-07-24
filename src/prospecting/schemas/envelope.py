@@ -74,6 +74,15 @@ class CostRecord(FrozenModel):
 
     llm_input_tokens: int = Field(default=0, ge=0)
     llm_output_tokens: int = Field(default=0, ge=0)
+    llm_calls: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Model invocations. Tracked alongside tokens because the run budget "
+            "ceils calls (max_llm_calls_per_run) and rate limits are per-call — "
+            "neither is derivable from a token count."
+        ),
+    )
     crawls: int = Field(default=0, ge=0)
     searches: int = Field(default=0, ge=0)
     dns_lookups: int = Field(default=0, ge=0)
@@ -88,6 +97,7 @@ class CostRecord(FrozenModel):
         return CostRecord(
             llm_input_tokens=self.llm_input_tokens + other.llm_input_tokens,
             llm_output_tokens=self.llm_output_tokens + other.llm_output_tokens,
+            llm_calls=self.llm_calls + other.llm_calls,
             crawls=self.crawls + other.crawls,
             searches=self.searches + other.searches,
             dns_lookups=self.dns_lookups + other.dns_lookups,
@@ -100,6 +110,7 @@ class CostRecord(FrozenModel):
             (
                 self.llm_input_tokens,
                 self.llm_output_tokens,
+                self.llm_calls,
                 self.crawls,
                 self.searches,
                 self.dns_lookups,

@@ -62,13 +62,17 @@ class TestCostRecord:
         assert not CostRecord(crawls=1).is_zero
 
     def test_addition_sums_every_component(self) -> None:
-        total = CostRecord(crawls=1, searches=2, llm_input_tokens=100).plus(
-            CostRecord(crawls=3, dns_lookups=1, llm_input_tokens=50)
+        total = CostRecord(crawls=1, searches=2, llm_input_tokens=100, llm_calls=1).plus(
+            CostRecord(crawls=3, dns_lookups=1, llm_input_tokens=50, llm_calls=2)
         )
         assert total.crawls == 4
         assert total.searches == 2
         assert total.dns_lookups == 1
         assert total.llm_input_tokens == 150
+        assert total.llm_calls == 3
+
+    def test_llm_calls_make_it_nonzero(self) -> None:
+        assert not CostRecord(llm_calls=1).is_zero
 
     def test_addition_does_not_mutate_either_operand(self) -> None:
         """Costs accumulate across stages; an earlier stage's total is history."""
