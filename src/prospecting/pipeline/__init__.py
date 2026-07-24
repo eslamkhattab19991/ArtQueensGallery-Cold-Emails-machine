@@ -6,8 +6,10 @@ independently runnable, resumable, and idempotent.
 
 Dependency rule
 ---------------
-The pipeline depends on ``prospecting.ports`` and ``prospecting.domain``. It must
-never import ``prospecting.adapters``: concrete implementations are injected by
-the composition root, which is what allows the whole pipeline to be tested with
-fakes and zero network access.
+The pipeline depends on ``prospecting.ports``, ``prospecting.domain``,
+``prospecting.schemas`` (the ``StageEnvelope`` records it routes), and
+``prospecting.config`` models (checkpoint cadence, budgets). It must never import
+``prospecting.adapters``: concrete implementations are injected by the
+composition root, which is what allows the whole pipeline to be tested with fakes
+and zero network access.
 """

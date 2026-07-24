@@ -124,7 +124,7 @@ the next begins.
 | 4 | Schemas — stage-boundary contracts | ✅ Complete |
 | 5 | Ports — abstract capability contracts | ✅ Complete |
 | 6 | Plugin system — contact-source registry | ✅ Complete |
-| 7 | Checkpoint manager | Not started |
+| 7 | Checkpoint manager — resumable stages | ✅ Complete |
 | 8 | Pipeline engine | Not started |
 | 9 | Logging system | Not started |
 | 10 | CLI | Not started |
