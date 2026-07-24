@@ -1019,6 +1019,8 @@ Provenance is not a discipline you remember to follow — it's checked:
 | `enrichment/evidence_router` | Decide which platforms to consult per artist | Read them |
 | `enrichment/readers/*` | Read one evidence platform | Synthesize hooks |
 | `pipeline/orchestrator` | Sequence stages, resume, enforce budget | Contain stage logic |
+| `pipeline/base` | The `Stage` contract and the shared record loop (resume, gate, budget stop) | Contain a specific stage's transformation |
+| `pipeline/budget` | Enforce the per-run spend ceilings | Decide what a stage may spend, or price it |
 | `pipeline/checkpoint` | Track completed/failed records durably so a stage resumes mid-way | Decide retry policy or stage order |
 | `pipeline/stages/*` | One transformation, one input shape, one output shape | Reach into another stage |
 | `scoring/*` | Filters, rubric, tiering, email confidence | Perform lookups |

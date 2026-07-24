@@ -125,7 +125,7 @@ the next begins.
 | 5 | Ports — abstract capability contracts | ✅ Complete |
 | 6 | Plugin system — contact-source registry | ✅ Complete |
 | 7 | Checkpoint manager — resumable stages | ✅ Complete |
-| 8 | Pipeline engine | Not started |
+| 8 | Pipeline engine — orchestrator, gate, budget | ✅ Complete |
 | 9 | Logging system | Not started |
 | 10 | CLI | Not started |
 | 11 | Unit tests across all phases | Ongoing per phase |
