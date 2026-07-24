@@ -187,7 +187,9 @@ artqueens-prospecting/
 │   │   │   ├── ownership.py          # ★ artist vs gallery vs institution
 │   │   │   ├── corroboration.py      # cross-source agreement scoring
 │   │   │   └── ranker.py             # merged candidates → ranked list
-│   │   └── result.py                 # ContactSourceResult, SourceOutcome
+│   │   └── engine imports its result types from ports/contact_source.py
+│   │                                 #   (a port owns the contract it returns;
+│   │                                 #    ports/ may not import contact/)
 │   │
 │   ├── enrichment/
 │   │   ├── evidence_router.py
@@ -1030,7 +1032,7 @@ Provenance is not a discipline you remember to follow — it's checked:
 
 **Open/Closed.** This is the requirement your first change targets, and it's now the load-bearing property of stage 5. Adding a browser-agent contact source is: one file implementing `ContactSource`, one entry in `contact_sources.yaml`. No engine change, no pipeline change, no merge change — the new source's results flow through normalization, ownership classification, corroboration, and ranking automatically because it returns the same `ContactCandidate` type as everything else. Source *ordering* is likewise config (`tier:`), not code.
 
-**Liskov Substitution.** Every `ContactSource` returns `ContactSourceResult` and signals failure as a value, never an exception — so one source timing out cannot abort the parallel group. Every `SearchProvider` returns `list[DiscoveryCandidate]`. Vendor quirks stay inside adapters. Contract tests run one shared suite against every implementation of a port, including every contact source.
+**Liskov Substitution.** Every `ContactSource` returns `ContactSourceResult` and signals failure as a value, never an exception — so one source timing out cannot abort the parallel group. Every `SearchProvider` returns `list[SearchHit]` — the raw hits a search engine yields (url, title, snippet, rank, engine); lifting a hit into a `DiscoveryCandidate` (an artist identity with provenance) is discovery-stage work, not something duplicated inside every provider adapter. Vendor quirks stay inside adapters. Contract tests run one shared suite against every implementation of a port, including every contact source.
 
 **Interface Segregation.** Narrow ports. Stage 6 depends only on `DnsResolver`. A contact source that reads cached content depends on `Cache` alone — not on `Crawler`, `SearchProvider`, or `LLMClient`.
 

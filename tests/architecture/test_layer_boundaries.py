@@ -111,16 +111,28 @@ def test_domain_imports_no_infrastructure_libraries() -> None:
 
 @pytest.mark.architecture
 def test_ports_depend_only_on_the_domain() -> None:
-    """Ports declare capabilities; they may reference the domain and nothing else."""
+    """Ports declare capabilities; they may reference the domain, schemas, and nothing else.
+
+    ``prospecting.schemas`` is allowed alongside the domain because the schemas
+    package itself depends on nothing but the domain (ARCHITECTURE.md §3) — so
+    ``ports -> schemas -> domain`` is still a straight line inward. This mirrors
+    the "Ports depend only on the domain" Import Linter contract in
+    ``pyproject.toml``, whose forbidden list is the application layers
+    (adapters, pipeline, contact, ...), not schemas. ``StageStore`` is the port
+    that needs it, to move :class:`~prospecting.schemas.envelope.StageEnvelope`
+    records between stages.
+    """
     violations: list[str] = []
-    allowed = ("prospecting.domain", "prospecting.ports")
+    allowed = ("prospecting.domain", "prospecting.ports", "prospecting.schemas")
 
     for module in _python_modules("ports"):
         for imported in _full_imports(module):
             if imported.startswith("prospecting.") and not imported.startswith(allowed):
                 violations.append(f"{module.relative_to(PACKAGE_ROOT)} imports {imported}")
 
-    assert not violations, "Ports may only depend on the domain:\n" + "\n".join(violations)
+    assert not violations, "Ports may only depend on the domain and schemas:\n" + "\n".join(
+        violations
+    )
 
 
 @pytest.mark.architecture

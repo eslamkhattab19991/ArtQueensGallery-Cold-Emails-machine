@@ -8,6 +8,8 @@ values.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from prospecting.domain.enums import (
@@ -111,7 +113,7 @@ class TestOnlyEmailCanCompleteALead:
     """
 
     #: The channels that are useful for outreach but can never complete a lead.
-    ENRICHMENT_CHANNELS = {
+    ENRICHMENT_CHANNELS: ClassVar[set[ContactMethod]] = {
         ContactMethod.PHONE,
         ContactMethod.FORM,
         ContactMethod.SOCIAL_HANDLE,
