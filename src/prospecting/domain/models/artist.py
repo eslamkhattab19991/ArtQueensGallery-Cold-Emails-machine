@@ -14,7 +14,7 @@ from pydantic import Field
 from prospecting.domain.base import FrozenModel
 from prospecting.domain.enums import CareerStage, ContactStatus, Tier
 from prospecting.domain.identifiers import CanonicalId, RunId
-from prospecting.domain.models.contact import EmailCandidate
+from prospecting.domain.models.contact import EmailCandidate, PhoneCandidate
 from prospecting.domain.models.exhibition import Exhibition, ExhibitionStats
 from prospecting.domain.models.personalization import PersonalizationHook
 from prospecting.domain.models.recognition import Award, PressMention, Residency
@@ -97,6 +97,14 @@ class ArtistProfile(FrozenModel):
     )
     gallery_email: EmailCandidate | None = Field(
         default=None, description="An indirect contact. Never a substitute for `email`."
+    )
+    phone: PhoneCandidate | None = Field(
+        default=None,
+        description=(
+            "A public phone number, if found. Enrichment only (ARCHITECTURE.md §0): "
+            "carried into the qualified-without-email export as a follow-up channel, "
+            "never a completion key and never part of `has_direct_contact`."
+        ),
     )
 
     # --- Enrichment (ARCHITECTURE.md §4.7) -----------------------------------

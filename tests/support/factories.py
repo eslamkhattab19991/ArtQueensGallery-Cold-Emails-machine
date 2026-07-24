@@ -10,10 +10,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from prospecting.domain.enums import EmailOwnership, ExtractionMethod, SourceType
-from prospecting.domain.models.contact import EmailCandidate
+from prospecting.domain.models.contact import EmailCandidate, PhoneCandidate
 from prospecting.domain.provenance import Provenance
 
-__all__ = ["make_email_candidate", "make_provenance"]
+__all__ = ["make_email_candidate", "make_phone_candidate", "make_provenance"]
 
 #: A fixed instant, not "now" — provenance timestamps must be deterministic
 #: for tests to be reproducible and diffable.
@@ -48,3 +48,17 @@ def make_email_candidate(**overrides: object) -> EmailCandidate:
     }
     values.update(overrides)
     return EmailCandidate(**values)
+
+
+def make_phone_candidate(**overrides: object) -> PhoneCandidate:
+    """Build a valid :class:`PhoneCandidate`, overriding only what a test cares about."""
+    values: dict[str, object] = {
+        "number": "+44 20 7946 0958",
+        "provenance": make_provenance(
+            extraction_method=ExtractionMethod.REGEX_MATCH,
+            evidence=None,
+            source_url="https://example-artist.com/contact",
+        ),
+    }
+    values.update(overrides)
+    return PhoneCandidate(**values)

@@ -18,6 +18,7 @@ from enum import StrEnum
 
 __all__ = [
     "CareerStage",
+    "ContactMethod",
     "ContactStatus",
     "EmailOwnership",
     "ExhibitionType",
@@ -76,6 +77,30 @@ class ContactStatus(StrEnum):
     DIRECT = "direct"
     INDIRECT = "indirect"
     EXHAUSTED = "exhausted"
+
+
+class ContactMethod(StrEnum):
+    """A channel through which an artist can be contacted.
+
+    ARCHITECTURE.md §4.5.1: a :class:`~prospecting.ports.contact_source.ContactSource`
+    declares which of these it ``provides``. The distinction that matters for
+    the business contract (ARCHITECTURE.md §0) is that **only** :attr:`EMAIL`
+    can complete a lead. A phone number, a contact form, or a social handle is
+    enrichment — genuinely useful for outreach, especially for a qualified
+    artist whose direct email was never found, but never a substitute for a
+    verified artist-owned email and never a reason to count an artist as a
+    completed lead.
+
+    Because the enrichment channels cannot promote an artist to a completed
+    lead, they do not need the strict ownership classification that email
+    requires (§4.5.4): the ownership machinery exists to protect the completion
+    KPI, and these channels do not touch it.
+    """
+
+    EMAIL = "email"
+    PHONE = "phone"
+    FORM = "form"
+    SOCIAL_HANDLE = "social_handle"
 
 
 class EmailOwnership(StrEnum):

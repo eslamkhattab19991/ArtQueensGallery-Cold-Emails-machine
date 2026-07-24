@@ -21,7 +21,11 @@ from prospecting.domain.enums import (
 from prospecting.domain.identifiers import CanonicalId, RunId
 from prospecting.domain.models.artist import ArtistProfile
 from prospecting.domain.provenance import Provenanced
-from tests.support.factories import make_email_candidate, make_provenance
+from tests.support.factories import (
+    make_email_candidate,
+    make_phone_candidate,
+    make_provenance,
+)
 
 
 def make_artist(**overrides: object) -> ArtistProfile:
@@ -89,6 +93,20 @@ class TestHasDirectContact:
             ),
         )
         assert artist.has_direct_contact
+
+    def test_a_phone_number_never_creates_a_direct_contact(self) -> None:
+        """Enrichment only (ARCHITECTURE.md §0): a phone cannot complete a lead.
+
+        An artist with a phone number but no artist-owned email is still
+        *without* a direct contact — the phone is carried for follow-up in the
+        qualified-without-email export, not counted as a completed lead.
+        """
+        artist = make_artist(
+            contact_status=ContactStatus.EXHAUSTED,
+            phone=make_phone_candidate(),
+        )
+        assert artist.phone is not None
+        assert not artist.has_direct_contact
 
 
 class TestPartialStatesAreRepresentable:

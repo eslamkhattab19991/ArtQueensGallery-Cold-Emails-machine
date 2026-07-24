@@ -8,7 +8,7 @@ from prospecting.domain.base import FrozenModel
 from prospecting.domain.enums import EmailOwnership
 from prospecting.domain.provenance import Provenance
 
-__all__ = ["EmailCandidate"]
+__all__ = ["EmailCandidate", "PhoneCandidate"]
 
 
 class EmailCandidate(FrozenModel):
@@ -48,3 +48,32 @@ class EmailCandidate(FrozenModel):
         same way, rather than each reimplementing the comparison.
         """
         return self.ownership is EmailOwnership.ARTIST_OWNED
+
+
+class PhoneCandidate(FrozenModel):
+    """A public phone number found for an artist — enrichment, never a lead key.
+
+    Deliberately simpler than :class:`EmailCandidate`, and the difference is
+    intentional rather than an omission. ``EmailCandidate`` carries an
+    ``ownership`` classification because a mislabelled email can inflate the
+    completion KPI — a gallery's address counted as the artist's is exactly the
+    2.5x over-count the ownership rule exists to prevent (ARCHITECTURE.md §4.5.4).
+    A phone number cannot complete a lead (ARCHITECTURE.md §0: completion
+    requires a verified *email*), so no ownership gate is needed to protect the
+    KPI from it. Whose number it is, when that matters, is read from the
+    :class:`~prospecting.domain.provenance.Provenance` — ``source_type`` and
+    ``source_name`` say whether it came from the artist's own page or a gallery
+    listing.
+
+    The number is stored as found, not normalized to E.164 here: normalization
+    needs the country, which is itself an extracted, provenanced value, so it
+    belongs to a later step that can record how the normalization was done —
+    not to the raw candidate produced at discovery.
+    """
+
+    number: str = Field(min_length=3, description="The number, as found. Not yet normalized.")
+    provenance: Provenance = Field(description="Where and how this number was found.")
+    corroborating_provenance: tuple[Provenance, ...] = Field(
+        default=(),
+        description="Independent sources that returned the same number.",
+    )

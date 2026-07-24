@@ -12,8 +12,12 @@ import pytest
 from pydantic import ValidationError
 
 from prospecting.domain.enums import EmailOwnership, ExtractionMethod, SourceType
-from prospecting.domain.models.contact import EmailCandidate
-from tests.support.factories import make_email_candidate, make_provenance
+from prospecting.domain.models.contact import EmailCandidate, PhoneCandidate
+from tests.support.factories import (
+    make_email_candidate,
+    make_phone_candidate,
+    make_provenance,
+)
 
 #: Every ownership class that must NOT count as a direct artist contact.
 NON_ARTIST_OWNERSHIP = [
@@ -133,3 +137,47 @@ class TestValidation:
         candidate = make_email_candidate()
         with pytest.raises(ValidationError, match="frozen"):
             candidate.ownership = EmailOwnership.GALLERY  # type: ignore[misc]
+
+
+class TestPhoneCandidateIsEnrichmentOnly:
+    """A phone number is a follow-up channel, never a completion key.
+
+    ARCHITECTURE.md §0: a lead completes on a verified email and nothing else.
+    ``PhoneCandidate`` therefore deliberately has no ``ownership`` field and no
+    ``is_directly_contactable`` gate — the ownership machinery exists to protect
+    the completion KPI, and a phone number cannot reach it.
+    """
+
+    def test_carries_no_ownership_gate(self) -> None:
+        """The absence is the design: phone cannot be mistaken for a lead key."""
+        assert not hasattr(make_phone_candidate(), "ownership")
+        assert not hasattr(make_phone_candidate(), "is_directly_contactable")
+
+    def test_stores_the_number_as_found(self) -> None:
+        candidate = make_phone_candidate(number="+33 1 42 60 30 30")
+        assert candidate.number == "+33 1 42 60 30 30"
+
+    def test_requires_provenance(self) -> None:
+        """A number with no traceable origin cannot be defended under GDPR."""
+        with pytest.raises(ValidationError):
+            PhoneCandidate(number="+44 20 7946 0958")  # type: ignore[call-arg]
+
+    def test_rejects_an_empty_number(self) -> None:
+        with pytest.raises(ValidationError):
+            make_phone_candidate(number="")
+
+    def test_defaults_to_no_corroboration(self) -> None:
+        assert make_phone_candidate().corroborating_provenance == ()
+
+    def test_records_each_confirming_source(self) -> None:
+        candidate = make_phone_candidate(
+            corroborating_provenance=(
+                make_provenance(source_url="https://example-artist.com/imprint"),
+            )
+        )
+        assert len(candidate.corroborating_provenance) == 1
+
+    def test_is_immutable(self) -> None:
+        candidate = make_phone_candidate()
+        with pytest.raises(ValidationError, match="frozen"):
+            candidate.number = "+1 202 555 0143"  # type: ignore[misc]

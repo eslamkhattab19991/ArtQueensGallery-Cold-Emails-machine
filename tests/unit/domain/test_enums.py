@@ -12,6 +12,7 @@ import pytest
 
 from prospecting.domain.enums import (
     CareerStage,
+    ContactMethod,
     ContactStatus,
     EmailOwnership,
     ExhibitionType,
@@ -24,6 +25,7 @@ from prospecting.domain.enums import (
 
 ALL_ENUMS = [
     CareerStage,
+    ContactMethod,
     ContactStatus,
     EmailOwnership,
     ExhibitionType,
@@ -90,6 +92,40 @@ class TestWireValuesArePinned:
 
     def test_tier_values(self) -> None:
         assert {tier.value for tier in Tier} == {"A", "B", "C"}
+
+    def test_contact_method_values(self) -> None:
+        assert {method.value for method in ContactMethod} == {
+            "email",
+            "phone",
+            "form",
+            "social_handle",
+        }
+
+
+class TestOnlyEmailCanCompleteALead:
+    """ARCHITECTURE.md §0: completion requires a verified email, nothing else.
+
+    The other contact methods are enrichment. Pinning this as a test guards the
+    business contract against a future change that quietly treats a phone number
+    or contact form as a completion channel.
+    """
+
+    #: The channels that are useful for outreach but can never complete a lead.
+    ENRICHMENT_CHANNELS = {
+        ContactMethod.PHONE,
+        ContactMethod.FORM,
+        ContactMethod.SOCIAL_HANDLE,
+    }
+
+    def test_email_is_a_contact_method(self) -> None:
+        assert ContactMethod.EMAIL.value == "email"
+
+    def test_email_is_not_one_of_the_enrichment_channels(self) -> None:
+        assert ContactMethod.EMAIL not in self.ENRICHMENT_CHANNELS
+
+    def test_email_and_the_enrichment_channels_partition_the_enum(self) -> None:
+        """Every member is either the completion channel or an enrichment one."""
+        assert {ContactMethod.EMAIL, *self.ENRICHMENT_CHANNELS} == set(ContactMethod)
 
 
 class TestTierExcludesRejection:
