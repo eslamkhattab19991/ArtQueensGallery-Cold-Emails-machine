@@ -65,3 +65,25 @@ Thumbs.db
 # ---------------------------------------------------------------------------
 .firecrawl/
 spikes/**/out/
+
+# ---------------------------------------------------------------------------
+# Delivered leads
+#
+# run_pipeline.py copies the finished sheets here for the operator. They are
+# real artists' names, email addresses and phone numbers — the same personal
+# data the retention policy covers — and they are reproducible for free from the
+# cache with `python run_pipeline.py --budget 0`. Neither fact argues for
+# committing them.
+# ---------------------------------------------------------------------------
+output/
+
+# ---------------------------------------------------------------------------
+# Local agent tooling (machine-specific, not part of the project)
+#
+# .claude/skills/ holds third-party skill packages fetched by a skill manager,
+# the same way node_modules holds fetched packages. They are not this project's
+# code and pin to whichever machine installed them.
+# ---------------------------------------------------------------------------
+.agents/
+skills-lock.json
+.claude/skills/

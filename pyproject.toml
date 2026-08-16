@@ -15,7 +15,7 @@ authors = [{ name = "Art Queens Gallery" }]
 # implemented. Declaring dependencies before there is code that imports them
 # produces a lockfile that lies about what the project actually uses.
 #
-#   Providers      -> firecrawl-py, anthropic, dnspython, openpyxl, httpx
+#   Providers      -> firecrawl-py, anthropic, dnspython, httpx
 dependencies = [
     # Phase 2 (configuration) and Phase 3 (domain models).
     # pydantic-settings is deliberately absent: this project layers YAML files,
@@ -27,6 +27,15 @@ dependencies = [
     # Phase 10 (CLI). Typer builds the `prospect` command from typed function
     # signatures, so the argument parsing and the help text stay in one place.
     "typer>=0.12",
+    # Reading the operator's input workbook. Declared because
+    # spikes/roster_probe/ingest.py imports it to read "Galleries sheet.xlsx",
+    # and without it a clean install fails on the pipeline's very first step.
+    #
+    # It stays banned inside src/ (tests/architecture/test_layer_boundaries.py):
+    # when the ingestion adapter lands, the workbook must be read behind a port
+    # like every other vendor library. Declaring it here does not license a
+    # direct import from the application package.
+    "openpyxl>=3.1",
 ]
 
 [project.scripts]
@@ -92,6 +101,11 @@ ignore = [
 # entirely for the same reason. The exemptions are listed explicitly rather than
 # blanket-ignoring the directory, so a spike still cannot skip docstrings or
 # smuggle in a relative import.
+# The operator's entry point. Same reasoning as the spikes below: its printed
+# progress *is* its interface, and a non-technical operator reads it to know
+# which step is running and what it costs.
+"run_pipeline.py" = ["T20"]
+
 "spikes/**" = [
     "T20",   # print() is the deliverable
     "ANN401",  # untyped JSON from the Firecrawl API
